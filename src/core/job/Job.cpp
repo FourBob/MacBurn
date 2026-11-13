@@ -119,6 +119,19 @@ Job JobBuilder::build(const Document& doc) const {
     return job;
 }
 
+Vec2 anchorPoint(const Rect& r, int anchor) {
+    anchor = std::clamp(anchor, 0, 8);
+    double fx = (anchor % 3) / 2.0;
+    double fy = 1.0 - (anchor / 3) / 2.0;   // obere Zeile = hinten = größtes y
+    return {r.x + fx * r.w, r.y + fy * r.h};
+}
+
+const char* anchorName(int anchor) {
+    static const char* names[] = {"oben links", "oben Mitte", "oben rechts", "links Mitte", "Mitte",
+                                  "rechts Mitte", "unten links", "unten Mitte", "unten rechts"};
+    return names[std::clamp(anchor, 0, 8)];
+}
+
 double estimateSeconds(const Job& job, double rapidSpeedMmMin, double accel) {
     double t = 0;
     Vec2 pos{0, 0};

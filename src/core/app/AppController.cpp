@@ -140,6 +140,8 @@ void AppController::setChoice(const std::string& key, int index) {
         jogStep_ = index; changed();
     } else if (key == "origin") {
         origin_ = index; changed();
+    } else if (key == "anchor") {
+        anchor_ = std::clamp(index, 0, 8); changed();
     }
 }
 

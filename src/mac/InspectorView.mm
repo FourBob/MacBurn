@@ -116,6 +116,24 @@ static NSTextField* label(NSString* s, NSFont* font, NSColor* color) {
                 view = g;
                 break;
             }
+            case mb::Field::Kind::Anchor: {
+                // 3 × 3 Punkte; der gewählte ist gefüllt
+                NSGridView* g = [NSGridView gridViewWithNumberOfColumns:3 rows:3];
+                for (int i = 0; i < 9; ++i) {
+                    NSButton* b = [NSButton buttonWithTitle:(i == f.selected ? @"●" : @"○") target:self action:@selector(anchor:)];
+                    b.bordered = NO;
+                    b.tag = i;
+                    b.identifier = key;
+                    b.enabled = f.enabled;
+                    b.font = [NSFont systemFontOfSize:15];
+                    b.contentTintColor = i == f.selected ? NSColor.controlAccentColor : NSColor.secondaryLabelColor;
+                    b.toolTip = NS(mb::anchorName(i));
+                    [g cellAtColumnIndex:i % 3 rowIndex:i / 3].contentView = b;
+                }
+                g.rowSpacing = 0; g.columnSpacing = 6;
+                view = [self row:NS(f.label) control:g unit:nil];
+                break;
+            }
             case mb::Field::Kind::Progress: {
                 NSProgressIndicator* p = [[NSProgressIndicator alloc] init];
                 p.indeterminate = NO;
@@ -166,6 +184,7 @@ static NSTextField* label(NSString* s, NSFont* font, NSColor* color) {
 - (void)choice:(NSPopUpButton*)p { _core->setChoice(STD(p.identifier), int(p.indexOfSelectedItem)); }
 - (void)number:(NSControl*)c { _core->setNumber(STD(c.identifier), c.doubleValue); }
 - (void)toggle:(NSSwitch*)s { _core->setToggle(STD(s.identifier), s.state == NSControlStateValueOn); }
+- (void)anchor:(NSButton*)b { _core->setChoice(STD(b.identifier), int(b.tag)); }
 - (void)button:(NSButton*)b { _core->pressButton(STD(b.identifier)); }
 
 @end

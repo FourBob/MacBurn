@@ -384,6 +384,17 @@ TEST(device_detach_during_job_stops_laser) {
     CHECK(f->realtimeBytes.find(char(0x18)) != std::string::npos);
 }
 
+TEST(anchor_points) {
+    Rect r{10, 20, 100, 40};
+    Vec2 c = anchorPoint(r, 4);
+    NEAR(c.x, 60); NEAR(c.y, 40);
+    Vec2 tl = anchorPoint(r, 0);
+    NEAR(tl.x, 10); NEAR(tl.y, 60);   // oben = hinten = größtes y
+    Vec2 br = anchorPoint(r, 8);
+    NEAR(br.x, 110); NEAR(br.y, 20);
+    CHECK(std::string(anchorName(4)) == "Mitte");
+}
+
 TEST(controller_preflight_without_device) {
     AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
     c.setPhase(Phase::Laser);

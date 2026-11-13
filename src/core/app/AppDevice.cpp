@@ -50,10 +50,9 @@ Rect AppController::outputBounds() const {
 std::optional<Vec2> AppController::offsetFor() const {
     Rect b = outputBounds();
     Vec2 off{0, 0};
-    if (origin_ == 1) {   // ab aktueller Position: linke untere Ecke des Designs an den Laserkopf
+    if (origin_ == 1) {   // am Laserkopf: gewählter Ankerpunkt des Designs liegt unter dem Kopf
         if (!dev_.connected) return std::nullopt;
-        Vec2 p = workPos();
-        off = {p.x - b.x, p.y - b.y};
+        off = workPos() - anchorPoint(b, anchor_);
     }
     Rect wa = workArea();
     Rect moved{b.x + off.x, b.y + off.y, b.w, b.h};
@@ -138,7 +137,8 @@ void AppController::frame() {
     if (!deviceIdle()) return;
     auto off = offsetFor();
     if (!off) {
-        message_ = "Das Design passt an dieser Stelle nicht auf die Arbeitsfläche.";
+        message_ = origin_ == 1 ? "Von dieser Kopfposition aus ragt das Design über die Arbeitsfläche. Kopf verschieben oder anderen Anker wählen."
+                                : "Das Design passt an dieser Stelle nicht auf die Arbeitsfläche.";
         changed();
         return;
     }
@@ -159,8 +159,9 @@ std::vector<PreflightCheck> AppController::preflight() const {
     auto* m = machine();
     auto off = offsetFor();
     c.push_back({"Design liegt auf der Arbeitsfläche",
-                 off ? "Ursprung: " + std::string(origin_ == 0 ? "Maschinenursprung vorne links" : "aktuelle Position des Laserkopfs")
-                     : "Bitte Design verschieben oder Jobursprung ändern.", true, bool(off)});
+                 off ? (origin_ == 0 ? std::string("Position: wie auf der Fläche")
+                                     : std::string("Position: am Laserkopf, Anker ") + anchorName(anchor_))
+                     : "Bitte Design verschieben oder Position ändern.", true, bool(off)});
     c.push_back({"Laser bereit", deviceIdle() ? "Verbunden, Zustand: " + grbl::describeState(dev_.state) : "Nicht bereit: " + grbl::describeState(dev_.state),
                  true, deviceIdle()});
     auto st = materialStatus();
@@ -332,13 +333,20 @@ void AppController::addDeviceFields(std::vector<Field>& f) const {
     if (alarm) f.push_back({Field::Kind::Button, "unlock", "Entsperren ohne Referenzfahrt"});
 
     f.push_back({Field::Kind::Header, "", "Auftrag"});
-    Field origin{Field::Kind::Choice, "origin", "Ursprung", {"Maschinenursprung", "Aktuelle Position"}};
+    Field origin{Field::Kind::Choice, "origin", "Position", {"Wie auf der Fläche", "Am Laserkopf"}};
     origin.selected = origin_;
     origin.enabled = !dev_.jobRunning;
     f.push_back(origin);
+    if (origin_ == 1) {
+        Field a{Field::Kind::Anchor, "anchor", "Anker"};
+        a.selected = anchor_;
+        a.enabled = !dev_.jobRunning;
+        f.push_back(a);
+        f.push_back({Field::Kind::Info, "", std::string("Der Punkt „") + anchorName(anchor_) + "“ des Designs liegt unter dem Laserkopf. Kopf mit den Pfeiltasten verschieben, dann Rahmen abfahren."});
+    }
     auto off = offsetFor();
     if (!off) {
-        Field w{Field::Kind::Info, "", "⚠ Das Design passt so nicht auf die Arbeitsfläche."};
+        Field w{Field::Kind::Info, "", origin_ == 1 ? "⚠ Von hier aus ragt das Design über die Arbeitsfläche." : "⚠ Das Design passt so nicht auf die Arbeitsfläche."};
         w.highlight = true;
         f.push_back(w);
     }

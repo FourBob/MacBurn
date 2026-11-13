@@ -34,7 +34,7 @@ struct LayerRow {
 
 // Generischer Inspektor: Der Kern beschreibt Felder, die Oberfläche baut sie.
 struct Field {
-    enum class Kind { Header, Info, Choice, Number, Toggle, Button, JogPad, Progress } kind = Kind::Info;
+    enum class Kind { Header, Info, Choice, Number, Toggle, Button, JogPad, Progress, Anchor } kind = Kind::Info;
     std::string key, label;
     std::vector<std::string> options;   // Choice
     int selected = 0;                   // Choice
@@ -144,7 +144,7 @@ private:
         std::map<int, double> settings;
     } dev_;
     std::vector<std::string> ports_;
-    int port_ = 0, jogStep_ = 1, origin_ = 0;
+    int port_ = 0, jogStep_ = 1, origin_ = 0, anchor_ = 4;   // Anker: Mitte
     Vec2 jobOffset_;
 
     const MachineProfile* machine() const;

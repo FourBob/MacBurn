@@ -39,6 +39,10 @@ private:
     const MaterialProfile& material_;
 };
 
+// Ankerpunkt eines Rechtecks: 0 = oben links … 4 = Mitte … 8 = unten rechts (zeilenweise, y nach hinten).
+Vec2 anchorPoint(const Rect& r, int anchor);
+const char* anchorName(int anchor);
+
 // Zeitschätzung mit Beschleunigung (Trapezprofil je Segment), Ergebnis in Sekunden.
 double estimateSeconds(const Job& job, double rapidSpeedMmMin, double accelMmS2 = 1000);
 
