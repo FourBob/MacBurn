@@ -383,7 +383,9 @@ std::string AppController::statusText() const {
     std::string s = m ? m->displayName() : "Keine Maschine";
     if (dev_.connected) {
         Vec2 p = workPos();
-        s += " · " + grbl::describeState(dev_.state) + fmt(" · X %.1f", p.x) + fmt("  Y %.1f", p.y);
+        std::string st = dev_.state.rfind("Run", 0) == 0 ? (dev_.jobRunning ? "Lasert …" : "Fährt (Laser aus)")
+                                                         : grbl::describeState(dev_.state);
+        s += " · " + st + fmt(" · X %.1f", p.x) + fmt("  Y %.1f", p.y);
     } else if (dev_.connecting) s += " · verbinde …";
     else s += " · nicht verbunden";
     Rect wa = workArea(), b = doc_.bounds();

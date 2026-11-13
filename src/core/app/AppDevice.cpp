@@ -262,7 +262,9 @@ void AppController::handleDevice(const grbl::DeviceEvent& e) {
             message_ = grbl::describeError(e.code);
             break;
         case K::Message:
-            if (e.text.find("Caution: Unlocked") != std::string::npos) return;
+            // Startmeldungen der Steuerung (Board, WLAN-Daten) gehören nicht in die Statusleiste.
+            if (e.text.find("Caution: Unlocked") != std::string::npos || e.text.rfind("Using machine", 0) == 0 ||
+                e.text.rfind("Mode=", 0) == 0) return;
             message_ = e.text;
             break;
         case K::Progress: {
@@ -321,8 +323,9 @@ void AppController::addDeviceFields(std::vector<Field>& f) const {
         a.highlight = true;
         f.push_back(a);
     }
+    bool jogging = dev_.state.rfind("Jog", 0) == 0;
     Field pad{Field::Kind::JogPad, "jog", ""};
-    pad.enabled = idle;
+    pad.enabled = idle || jogging;   // mehrere Klicks hintereinander erlauben
     f.push_back(pad);
     Field step{Field::Kind::Choice, "jogStep", "Schrittweite", {"0,1 mm", "1 mm", "10 mm", "50 mm"}};
     step.selected = jogStep_;

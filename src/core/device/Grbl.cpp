@@ -93,7 +93,7 @@ std::string describeError(int code) {
 std::string describeState(const std::string& s) {
     std::string base = s.substr(0, s.find(':'));
     if (base == "Idle") return "Bereit";
-    if (base == "Run") return "Lasert …";
+    if (base == "Run") return "In Bewegung";
     if (base == "Hold") return "Pausiert";
     if (base == "Jog") return "Bewegt sich";
     if (base == "Home") return "Referenzfahrt";

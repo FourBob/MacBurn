@@ -205,6 +205,11 @@ void GrblDevice::handleLine(const std::string& line) {
     }
     if (line.rfind("ALARM:", 0) == 0) {
         int code = std::atoi(line.c_str() + 6);
+        {
+            // Nach einem Alarm nie weiterfahren: alle wartenden Befehle verwerfen.
+            std::lock_guard<std::mutex> lock(mutex_);
+            pending_.clear();
+        }
         emit({DeviceEvent::Kind::Alarm, {}, describeAlarm(code), code});
         if (jobActive_) abortJob(describeAlarm(code));
         return;

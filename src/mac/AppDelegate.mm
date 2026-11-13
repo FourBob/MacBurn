@@ -72,11 +72,36 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
         [view addItem:p];
     }
 
+    NSMenu* laser = [[NSMenu alloc] initWithTitle:@"Laser"];
+    [laser addItem:item(@"Verbinden", @selector(laserConnect:), @"k")];
+    [laser addItem:item(@"Trennen", @selector(laserDisconnect:), @"k", NSEventModifierFlagCommand | NSEventModifierFlagShift)];
+    [laser addItem:NSMenuItem.separatorItem];
+    [laser addItem:item(@"Referenzfahrt", @selector(laserHome:), @"h", NSEventModifierFlagCommand | NSEventModifierFlagOption)];
+    [laser addItem:item(@"Rahmen abfahren", @selector(laserFrame:), @"r")];
+    [laser addItem:NSMenuItem.separatorItem];
+    NSMenuItem* p0 = item(@"Position wie auf der Fläche", @selector(laserPosition:), @"");
+    p0.tag = 0;
+    NSMenuItem* p1 = item(@"Position am Laserkopf", @selector(laserPosition:), @"");
+    p1.tag = 1;
+    [laser addItem:p0];
+    [laser addItem:p1];
+    NSMenu* anchors = [[NSMenu alloc] initWithTitle:@"Anker"];
+    for (int i = 0; i < 9; ++i) {
+        NSMenuItem* ai = item(NS(std::string("Anker ") + mb::anchorName(i)), @selector(laserAnchor:), @"");
+        ai.tag = i;
+        [anchors addItem:ai];
+    }
+    NSMenuItem* anchorItem = [[NSMenuItem alloc] initWithTitle:@"Anker" action:nil keyEquivalent:@""];
+    anchorItem.submenu = anchors;
+    [laser addItem:anchorItem];
+    [laser addItem:NSMenuItem.separatorItem];
+    [laser addItem:item(@"Stopp", @selector(laserStop:), @".")];
+
     NSMenu* window = [[NSMenu alloc] initWithTitle:@"Fenster"];
     [window addItem:item(@"Im Dock ablegen", @selector(performMiniaturize:), @"m")];
     NSApp.windowsMenu = window;
 
-    for (NSMenu* m in @[app, file, edit, view, window]) {
+    for (NSMenu* m in @[app, file, edit, view, laser, window]) {
         NSMenuItem* top = [[NSMenuItem alloc] initWithTitle:m.title action:nil keyEquivalent:@""];
         top.submenu = m;
         [bar addItem:top];
@@ -87,6 +112,12 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
 - (BOOL)validateMenuItem:(NSMenuItem*)mi {
     if (mi.action == @selector(undoCore:)) { mi.title = NS(_core->undoTitle()); return _core->canUndo(); }
     if (mi.action == @selector(redoCore:)) { mi.title = NS(_core->redoTitle()); return _core->canRedo(); }
+    if (mi.action == @selector(laserConnect:)) return !_core->deviceConnected();
+    if (mi.action == @selector(laserDisconnect:)) return _core->deviceConnected() && !_core->jobRunning();
+    if (mi.action == @selector(laserHome:) || mi.action == @selector(laserFrame:)) return _core->deviceConnected() && !_core->jobRunning();
+    if (mi.action == @selector(laserStop:)) return _core->deviceConnected();
+    if (mi.action == @selector(laserPosition:)) { mi.state = mi.tag == _core->positionMode() ? NSControlStateValueOn : NSControlStateValueOff; return !_core->jobRunning(); }
+    if (mi.action == @selector(laserAnchor:)) { mi.state = mi.tag == _core->anchor() ? NSControlStateValueOn : NSControlStateValueOff; return _core->positionMode() == 1 && !_core->jobRunning(); }
     if (mi.action == @selector(showPhase:)) { mi.state = mi.tag == NSInteger(_core->phase()) ? NSControlStateValueOn : NSControlStateValueOff; }
     return YES;
 }
@@ -96,6 +127,14 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
 - (void)showPhase:(NSMenuItem*)sender { _core->setPhase(mb::Phase(sender.tag)); }
 
 - (void)newDocumentCore:(id)sender { _core->newDocument(); }
+
+- (void)laserConnect:(id)sender { _core->setPhase(mb::Phase::Laser); _core->connect(); }
+- (void)laserDisconnect:(id)sender { _core->disconnect(); }
+- (void)laserHome:(id)sender { _core->home(); }
+- (void)laserFrame:(id)sender { _core->frame(); }
+- (void)laserStop:(id)sender { _core->stop(); }
+- (void)laserPosition:(NSMenuItem*)sender { _core->setChoice("origin", int(sender.tag)); }
+- (void)laserAnchor:(NSMenuItem*)sender { _core->setChoice("anchor", int(sender.tag)); }
 
 - (void)importFile:(id)sender {
     NSOpenPanel* panel = [NSOpenPanel openPanel];

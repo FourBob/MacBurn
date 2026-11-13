@@ -113,6 +113,7 @@ static NSTextField* label(NSString* s, NSFont* font, NSColor* color) {
                     }
                 g.rowSpacing = 4; g.columnSpacing = 4;
                 g.xPlacement = NSGridCellPlacementCenter;
+                for (int c = 0; c < 3; ++c) [g columnAtIndex:c].width = 44;
                 view = g;
                 break;
             }
@@ -131,6 +132,8 @@ static NSTextField* label(NSString* s, NSFont* font, NSColor* color) {
                     [g cellAtColumnIndex:i % 3 rowIndex:i / 3].contentView = b;
                 }
                 g.rowSpacing = 0; g.columnSpacing = 6;
+                for (int c = 0; c < 3; ++c) [g columnAtIndex:c].width = 20;
+                [g setContentHuggingPriority:NSLayoutPriorityRequired forOrientation:NSLayoutConstraintOrientationHorizontal];
                 view = [self row:NS(f.label) control:g unit:nil];
                 break;
             }

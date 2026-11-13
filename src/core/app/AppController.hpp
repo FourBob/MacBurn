@@ -102,6 +102,8 @@ public:
     void pauseOrResume();
     void stop();
     bool deviceConnected() const { return dev_.connected; }
+    int positionMode() const { return origin_; }   // 0 = wie auf der Fläche, 1 = am Laserkopf
+    int anchor() const { return anchor_; }
     bool jobRunning() const { return dev_.jobRunning; }
 
     // --- View-Modelle ---
