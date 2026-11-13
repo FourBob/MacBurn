@@ -81,10 +81,41 @@
         CGPathRelease(p);
     }
 
+    // Umriss des Auftrags auf der Maschine
+    if (_list.jobFrame) {
+        const auto& f = *_list.jobFrame;
+        CGRect r = CGRectApplyAffineTransform(CGRectMake(f.x, f.y, f.w, f.h), t);
+        CGFloat dash[] = {6, 4};
+        CGContextSetLineDash(ctx, 0, dash, 2);
+        CGContextSetStrokeColorWithColor(ctx, NSColor.controlAccentColor.CGColor);
+        CGContextStrokeRectWithWidth(ctx, r, 1);
+        CGContextSetLineDash(ctx, 0, nullptr, 0);
+    }
+    // Laserkopf
+    if (_list.head) {
+        CGPoint h = CGPointApplyAffineTransform(CGPointMake(_list.head->x, _list.head->y), t);
+        CGContextSetStrokeColorWithColor(ctx, NSColor.systemRedColor.CGColor);
+        CGContextSetLineWidth(ctx, 1.5);
+        CGContextStrokeEllipseInRect(ctx, CGRectMake(h.x - 7, h.y - 7, 14, 14));
+        CGContextStrokeLineSegments(ctx, (CGPoint[]){{h.x - 12, h.y}, {h.x + 12, h.y}, {h.x, h.y - 12}, {h.x, h.y + 12}}, 4);
+    }
+
     // Maßangabe
     NSString* label = [NSString stringWithFormat:@"%.0f %%  ·  %.0f × %.0f mm", _zoom * 100, wa.w, wa.h];
     [label drawAtPoint:NSMakePoint(10, 8) withAttributes:@{NSFontAttributeName: [NSFont monospacedDigitSystemFontOfSize:11 weight:NSFontWeightRegular],
                                                           NSForegroundColorAttributeName: NSColor.secondaryLabelColor}];
+}
+
+- (void)keyDown:(NSEvent*)e {
+    if (!self.onKey) { [super keyDown:e]; return; }
+    switch (e.keyCode) {
+        case 123: self.onKey(-1, 0, NO); return;   // ←
+        case 124: self.onKey(1, 0, NO); return;    // →
+        case 125: self.onKey(0, -1, NO); return;   // ↓
+        case 126: self.onKey(0, 1, NO); return;    // ↑
+        case 53: self.onKey(0, 0, YES); return;    // Esc
+        default: [super keyDown:e];
+    }
 }
 
 // Drag & Drop aus dem Finder

@@ -47,6 +47,13 @@ AppController::AppController(const std::string& systemProfiles, const std::strin
     }
     doc_ = Document::sample();
     rebuild();
+    device_ = std::make_unique<grbl::GrblDevice>([this](const grbl::DeviceEvent& e) {
+        // Geräte-Thread → Main-Thread
+        grbl::DeviceEvent copy = e;
+        if (mainQueue_) mainQueue_([this, copy] { handleDevice(copy); });
+        else handleDevice(copy);
+    });
+    refreshPorts();
 }
 
 // ---------- Zugriff ----------
@@ -127,6 +134,12 @@ void AppController::setChoice(const std::string& key, int index) {
         editLayer(std::string("Absicht ") + intentLabel(i), [i](Layer& l) { l.intent = i; });
     } else if (key == "variant") {
         selectVariant(index);
+    } else if (key == "port") {
+        port_ = index; changed();
+    } else if (key == "jogStep") {
+        jogStep_ = index; changed();
+    } else if (key == "origin") {
+        origin_ = index; changed();
     }
 }
 
@@ -144,6 +157,17 @@ void AppController::setToggle(const std::string& key, bool on) {
 }
 
 void AppController::pressButton(const std::string& key) {
+    if (key == "connect") { connect(); return; }
+    if (key == "disconnect") { disconnect(); return; }
+    if (key == "refreshPorts") { refreshPorts(); changed(); return; }
+    if (key == "home") { home(); return; }
+    if (key == "unlock") { unlock(); return; }
+    if (key == "frame") { frame(); return; }
+    if (key == "stop") { stop(); return; }
+    if (key == "jog+x") { jog(1, 0); return; }
+    if (key == "jog-x") { jog(-1, 0); return; }
+    if (key == "jog+y") { jog(0, 1); return; }
+    if (key == "jog-y") { jog(0, -1); return; }
     if (key == "resetLayer") editLayer("Ebene zurücksetzen", [](Layer& l) { l.overrides = {}; });
     else if (key == "resetAll") {
         Document before = doc_, after = doc_;
@@ -271,20 +295,16 @@ std::vector<Field> AppController::inspector() const {
     auto* mat = material();
 
     if (phase_ == Phase::Laser) {
+        addDeviceFields(f);
         f.push_back({Field::Kind::Header, "", "Maschine"});
         if (m) {
-            f.push_back({Field::Kind::Info, "", m->displayName()});
             Field var{Field::Kind::Choice, "variant", "Ausführung"};
             for (const auto& v : m->variants) var.options.push_back(v.name + fmt(" (%.0f", v.area.x) + fmt(" × %.0f mm)", v.area.y));
             var.selected = variant_;
             f.push_back(var);
             if (!m->focusHint.empty()) f.push_back({Field::Kind::Info, "", "Fokus: " + m->focusHint});
-            if (!m->airAssistControllable) f.push_back({Field::Kind::Info, "", "Luftpumpe wird am Gerät geschaltet."});
+            if (!m->airAssistControllable) f.push_back({Field::Kind::Info, "", "Die Luftpumpe wird am Gerät geschaltet."});
         }
-        f.push_back({Field::Kind::Header, "", "Auftrag"});
-        f.push_back({Field::Kind::Info, "", "Geschätzte Laufzeit: " + estimateText()});
-        f.push_back({Field::Kind::Info, "", fmt("Brennweg %.0f mm", job_.burnLengthMm) + fmt(" · Leerfahrt %.0f mm", job_.travelLengthMm)});
-        f.push_back({Field::Kind::Info, "", "Gerätesteuerung (Verbinden, Joggen, Rahmen) folgt im nächsten Schritt. G-Code-Export: Ablage › G-Code exportieren …"});
         return f;
     }
 
@@ -358,7 +378,12 @@ std::string AppController::estimateText() const {
 
 std::string AppController::statusText() const {
     auto* m = machine();
-    std::string s = m ? m->displayName() + " · nicht verbunden" : "Keine Maschine";
+    std::string s = m ? m->displayName() : "Keine Maschine";
+    if (dev_.connected) {
+        Vec2 p = workPos();
+        s += " · " + grbl::describeState(dev_.state) + fmt(" · X %.1f", p.x) + fmt("  Y %.1f", p.y);
+    } else if (dev_.connecting) s += " · verbinde …";
+    else s += " · nicht verbunden";
     Rect wa = workArea(), b = doc_.bounds();
     if (!wa.contains(b)) s += " · ⚠ Design liegt außerhalb der Arbeitsfläche";
     if (!store_.errors().empty()) s += " · " + std::to_string(store_.errors().size()) + " Profil(e) fehlerhaft";
@@ -367,14 +392,33 @@ std::string AppController::statusText() const {
 }
 
 std::string AppController::primaryActionTitle() const {
-    return phase_ == Phase::Laser ? "Lasern" : "Weiter zum Lasern";
+    switch (primaryAction()) {
+        case PrimaryAction::GoToLaser: return "Weiter zum Lasern";
+        case PrimaryAction::Connect: return "Verbinden";
+        case PrimaryAction::Connecting: return "Verbinde …";
+        case PrimaryAction::StartJob: return "Lasern …";
+        case PrimaryAction::Pause: return "Pause";
+        case PrimaryAction::Resume: return "Fortsetzen";
+        case PrimaryAction::Unlock: return "Entsperren";
+    }
+    return "";
 }
 
 std::string AppController::undoTitle() const { return canUndo() ? "Widerrufen: " + undo_.undoLabel() : "Widerrufen"; }
 std::string AppController::redoTitle() const { return canRedo() ? "Wiederholen: " + undo_.redoLabel() : "Wiederholen"; }
 
 RenderList AppController::renderList() const {
-    return buildRenderList(doc_, job_, phase_, workArea());
+    RenderList rl = buildRenderList(doc_, job_, phase_, workArea());
+    if (phase_ == Phase::Laser) {
+        if (dev_.connected) rl.head = workPos();
+        if (auto off = offsetFor()) {
+            Rect b = outputBounds();
+            rl.jobFrame = Rect{b.x + off->x, b.y + off->y, b.w, b.h};
+            if (off->x != 0 || off->y != 0)
+                for (auto& st : rl.strokes) for (auto& p : st.points) p = p + *off;
+        }
+    }
+    return rl;
 }
 
 } // namespace mb

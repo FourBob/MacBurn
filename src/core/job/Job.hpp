@@ -46,6 +46,7 @@ struct GcodeOptions {
     double sMax = 1000;
     bool dynamicPower = true;      // M4 statt M3
     bool airAssistGcode = false;   // M8/M9 ausgeben
+    Vec2 offset;                   // Verschiebung aller Koordinaten (Jobursprung)
 };
 std::string writeGcode(const Job& job, const GcodeOptions& opt);
 

@@ -5,6 +5,7 @@
 @implementation InspectorView {
     mb::AppController* _core;
     NSStackView* _stack;
+    std::vector<mb::Field> _shown;   // nur neu bauen, wenn sich etwas geändert hat
 }
 
 - (instancetype)initWithCore:(mb::AppController*)core {
@@ -41,6 +42,8 @@ static NSTextField* label(NSString* s, NSFont* font, NSColor* color) {
 }
 
 - (void)showFields:(const std::vector<mb::Field>&)fields {
+    if (fields == _shown && _stack.arrangedSubviews.count) return;
+    _shown = fields;
     for (NSView* v in _stack.arrangedSubviews.copy) [v removeFromSuperview];
 
     for (const auto& f : fields) {
@@ -59,6 +62,7 @@ static NSTextField* label(NSString* s, NSFont* font, NSColor* color) {
                 [p selectItemAtIndex:f.selected];
                 p.identifier = key;
                 p.target = self; p.action = @selector(choice:);
+                p.enabled = f.enabled;
                 view = [self row:NS(f.label) control:p unit:nil];
                 break;
             }
@@ -93,17 +97,51 @@ static NSTextField* label(NSString* s, NSFont* font, NSColor* color) {
                 view = [self row:NS(f.label) control:s unit:nil];
                 break;
             }
+            case mb::Field::Kind::JogPad: {
+                // ▲ ◀ ▶ ▼ – Pfeiltasten auf der Zeichenfläche tun dasselbe
+                NSGridView* g = [NSGridView gridViewWithNumberOfColumns:3 rows:3];
+                NSString* titles[3][3] = {{@"", @"▲", @""}, {@"◀", @"", @"▶"}, {@"", @"▼", @""}};
+                NSString* keys[3][3] = {{@"", @"jog+y", @""}, {@"jog-x", @"", @"jog+x"}, {@"", @"jog-y", @""}};
+                for (int r = 0; r < 3; ++r)
+                    for (int c = 0; c < 3; ++c) {
+                        if (!titles[r][c].length) continue;
+                        NSButton* b = [NSButton buttonWithTitle:titles[r][c] target:self action:@selector(button:)];
+                        b.identifier = keys[r][c];
+                        b.enabled = f.enabled;
+                        [b.widthAnchor constraintEqualToConstant:44].active = YES;
+                        [g cellAtColumnIndex:c rowIndex:r].contentView = b;
+                    }
+                g.rowSpacing = 4; g.columnSpacing = 4;
+                g.xPlacement = NSGridCellPlacementCenter;
+                view = g;
+                break;
+            }
+            case mb::Field::Kind::Progress: {
+                NSProgressIndicator* p = [[NSProgressIndicator alloc] init];
+                p.indeterminate = NO;
+                p.minValue = 0; p.maxValue = 100; p.doubleValue = f.value;
+                NSTextField* t = label([NSString stringWithFormat:@"%.0f %%  ·  %@", f.value, NS(f.unit)],
+                                       [NSFont monospacedDigitSystemFontOfSize:11 weight:NSFontWeightRegular], NSColor.secondaryLabelColor);
+                NSStackView* s = [NSStackView stackViewWithViews:@[p, t]];
+                s.orientation = NSUserInterfaceLayoutOrientationVertical;
+                s.alignment = NSLayoutAttributeLeading;
+                [p.widthAnchor constraintEqualToAnchor:s.widthAnchor].active = YES;
+                view = s;
+                break;
+            }
             case mb::Field::Kind::Button: {
                 NSButton* b = [NSButton buttonWithTitle:NS(f.label) target:self action:@selector(button:)];
                 b.identifier = key;
                 b.controlSize = NSControlSizeSmall;
+                b.enabled = f.enabled;
+                if (f.highlight) { b.bezelColor = NSColor.systemRedColor; b.controlSize = NSControlSizeLarge; }
                 view = b;
                 break;
             }
         }
         if (!view) continue;
         [_stack addArrangedSubview:view];
-        if (f.kind != mb::Field::Kind::Button) [self fill:view];
+        if (f.kind != mb::Field::Kind::Button && f.kind != mb::Field::Kind::JogPad) [self fill:view];
         if (f.kind == mb::Field::Kind::Header && view != _stack.arrangedSubviews.firstObject)
             [_stack setCustomSpacing:16 afterView:_stack.arrangedSubviews[_stack.arrangedSubviews.count - 2]];
     }

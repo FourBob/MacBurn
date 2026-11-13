@@ -23,8 +23,10 @@ add_library(macburn_core STATIC
   src/core/document/Document.cpp
   src/core/job/Job.cpp
   src/core/device/Grbl.cpp
+  src/core/device/GrblDevice.cpp
   src/core/render/RenderList.cpp
   src/core/app/AppController.cpp
+  src/core/app/AppDevice.cpp
   src/core/io/Xml.cpp
   src/core/io/SvgImport.cpp
 )

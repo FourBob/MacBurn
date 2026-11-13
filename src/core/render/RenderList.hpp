@@ -5,6 +5,7 @@
 #include "document/Document.hpp"
 #include "job/Job.hpp"
 
+#include <optional>
 #include <vector>
 
 namespace mb {
@@ -22,6 +23,8 @@ struct Stroke {
 struct RenderList {
     Rect workArea;
     std::vector<Stroke> strokes;
+    std::optional<Vec2> head;       // Laserkopf (nur verbunden)
+    std::optional<Rect> jobFrame;   // Umriss des Auftrags auf der Maschine
 };
 
 // Gestalten: Ebenenfarben. Vorbereiten: Brennfarbe + Leerfahrten. Lasern: Brennfarbe.

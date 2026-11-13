@@ -8,4 +8,6 @@
 - (void)setRenderList:(const mb::RenderList&)list;
 // Wird aufgerufen, wenn eine Datei auf die Fläche gezogen wird.
 @property (nonatomic, copy) void (^onDropFile)(NSString* path);
+// Pfeiltasten (dx, dy) und Esc (0, 0 mit escape = YES)
+@property (nonatomic, copy) void (^onKey)(int dx, int dy, BOOL escape);
 @end

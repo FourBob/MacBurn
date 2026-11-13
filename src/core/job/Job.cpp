@@ -143,20 +143,20 @@ std::string writeGcode(const Job& job, const GcodeOptions& opt) {
     double lastF = -1, lastS = -1;
     for (const auto& m : job.moves) {
         if (m.kind == Move::Kind::Rapid) {
-            std::snprintf(buf, sizeof buf, "G0 X%.3f Y%.3f S0\n", m.to.x, m.to.y);
+            std::snprintf(buf, sizeof buf, "G0 X%.3f Y%.3f S0\n", m.to.x + opt.offset.x, m.to.y + opt.offset.y);
             lastS = 0;
             g << buf;
             continue;
         }
         double s = std::round(m.power / 100.0 * opt.sMax);
-        std::string line = "G1 X" + std::string(buf, std::snprintf(buf, sizeof buf, "%.3f", m.to.x))
-                         + " Y" + std::string(buf, std::snprintf(buf, sizeof buf, "%.3f", m.to.y));
+        std::string line = "G1 X" + std::string(buf, std::snprintf(buf, sizeof buf, "%.3f", m.to.x + opt.offset.x))
+                         + " Y" + std::string(buf, std::snprintf(buf, sizeof buf, "%.3f", m.to.y + opt.offset.y));
         if (m.speed != lastF) { std::snprintf(buf, sizeof buf, " F%.0f", m.speed); line += buf; lastF = m.speed; }
         if (s != lastS) { std::snprintf(buf, sizeof buf, " S%.0f", s); line += buf; lastS = s; }
         g << line << "\n";
     }
     if (opt.airAssistGcode) g << "M9\n";
-    g << "M5\nG0 X0 Y0\n";
+    g << "M5\n";
     return g.str();
 }
 

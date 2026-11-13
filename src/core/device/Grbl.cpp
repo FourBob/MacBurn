@@ -41,7 +41,7 @@ std::optional<Status> parseStatus(const std::string& line) {
         if (colon == std::string::npos) continue;
         std::string key = field.substr(0, colon), val = field.substr(colon + 1);
         auto n = numbers(val);
-        if ((key == "MPos" || key == "WPos") && n.size() >= 2) st.machinePos = {n[0], n[1]};
+        if ((key == "MPos" || key == "WPos") && n.size() >= 2) { st.machinePos = {n[0], n[1]}; st.workPosReported = key == "WPos"; }
         else if (key == "WCO" && n.size() >= 2) st.workOffset = Vec2{n[0], n[1]};
         else if (key == "FS" && n.size() >= 2) { st.feed = n[0]; st.spindle = n[1]; }
         else if (key == "F" && !n.empty()) st.feed = n[0];
@@ -138,6 +138,7 @@ bool SerialPort::open(const std::string& path, int baud, std::string* error) {
         return false;
     }
     buffer_.clear();
+    path_ = path;
     return true;
 }
 

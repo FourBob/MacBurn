@@ -4,12 +4,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
+#include "device/GrblDevice.hpp"
 #include "document/Document.hpp"
 #include "job/Job.hpp"
 #include "profiles/Profiles.hpp"
 #include "render/RenderList.hpp"
 
 #include <functional>
+#include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -31,7 +34,7 @@ struct LayerRow {
 
 // Generischer Inspektor: Der Kern beschreibt Felder, die Oberfläche baut sie.
 struct Field {
-    enum class Kind { Header, Info, Choice, Number, Toggle, Button } kind = Kind::Info;
+    enum class Kind { Header, Info, Choice, Number, Toggle, Button, JogPad, Progress } kind = Kind::Info;
     std::string key, label;
     std::vector<std::string> options;   // Choice
     int selected = 0;                   // Choice
@@ -39,14 +42,32 @@ struct Field {
     std::string unit;
     bool on = false;                    // Toggle
     bool highlight = false;             // geänderter Wert / Warnung
+    bool enabled = true;
+
+    bool operator==(const Field&) const = default;
 };
+
+// Punkt der Startprüfung vor dem Lasern
+struct PreflightCheck {
+    std::string text, detail;
+    bool automatic = false;   // vom Programm geprüft (sonst: vom Menschen abzuhaken)
+    bool ok = true;           // nur bei automatischen Prüfungen
+};
+
+// Was der Hauptknopf in der Werkzeugleiste gerade tut
+enum class PrimaryAction { GoToLaser, Connect, Connecting, StartJob, Pause, Resume, Unlock };
 
 class AppController {
 public:
     // profileRoots: Systemprofile (im Bundle) und Benutzerprofile.
     AppController(const std::string& systemProfiles, const std::string& userProfiles);
 
+    ~AppController();
     void setOnChange(std::function<void()> cb) { onChange_ = std::move(cb); }
+    // Häufige Statusmeldungen (Position): nur Statusleiste und Zeichenfläche neu zeichnen.
+    void setOnStatus(std::function<void()> cb) { onStatus_ = std::move(cb); }
+    // Führt eine Funktion auf dem Main-Thread aus (Cocoa: dispatch_async).
+    void setMainQueue(std::function<void(std::function<void()>)> q) { mainQueue_ = std::move(q); }
 
     // --- Befehle ---
     void setPhase(Phase p);
@@ -67,6 +88,21 @@ public:
     // Ein unverändertes Beispielprojekt wird dabei ersetzt.
     ImportResult importFile(const std::string& path);
     std::string documentTitle() const { return title_; }
+
+    // --- Gerät ---
+    PrimaryAction primaryAction() const;
+    void connect();
+    void disconnect();
+    void jog(int dx, int dy);           // Richtung, Schrittweite aus dem Inspektor
+    void home();
+    void unlock();
+    void frame();
+    std::vector<PreflightCheck> preflight() const;
+    void startJob();                    // erst nach bestätigter Startprüfung
+    void pauseOrResume();
+    void stop();
+    bool deviceConnected() const { return dev_.connected; }
+    bool jobRunning() const { return dev_.jobRunning; }
 
     // --- View-Modelle ---
     Phase phase() const { return phase_; }
@@ -97,7 +133,19 @@ private:
     std::string message_;
     std::string title_ = "Beispiel";
     bool isSample_ = true;
-    std::function<void()> onChange_;
+    std::function<void()> onChange_, onStatus_;
+    std::function<void(std::function<void()>)> mainQueue_;
+
+    struct DeviceState {
+        bool connected = false, connecting = false, jobRunning = false;
+        std::string port, identity, state, lastProblem;
+        Vec2 machinePos, wco;
+        size_t done = 0, total = 0;
+        std::map<int, double> settings;
+    } dev_;
+    std::vector<std::string> ports_;
+    int port_ = 0, jogStep_ = 1, origin_ = 0;
+    Vec2 jobOffset_;
 
     const MachineProfile* machine() const;
     std::vector<ProfileStore::MaterialChoice> choices() const;
@@ -107,6 +155,15 @@ private:
     void rebuild();
     void changed();
     void editLayer(const std::string& label, std::function<void(Layer&)> fn);
+    void refreshPorts();
+    void handleDevice(const grbl::DeviceEvent& e);
+    Vec2 workPos() const { return dev_.machinePos - dev_.wco; }
+    bool deviceIdle() const;
+    Rect outputBounds() const;            // nur ausgegebene Ebenen
+    std::optional<Vec2> offsetFor() const; // Verschiebung je nach Jobursprung; nullopt = passt nicht
+    void addDeviceFields(std::vector<Field>& f) const;
+
+    std::unique_ptr<grbl::GrblDevice> device_;   // zuletzt: wird zuerst zerstört
 };
 
 } // namespace mb

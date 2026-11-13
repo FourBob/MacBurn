@@ -3,6 +3,7 @@
 #import "CanvasView.h"
 #import "InspectorView.h"
 #import "Bridge.hpp"
+#import <objc/runtime.h>
 
 static NSToolbarItemIdentifier const kPhase = @"phase";
 static NSToolbarItemIdentifier const kEstimate = @"estimate";
@@ -46,7 +47,9 @@ static NSToolbarItemIdentifier const kPrimary = @"primary";
     [self buildContent];
 
     __weak MainWindow* weakSelf = self;
+    _core->setMainQueue([](std::function<void()> fn) { dispatch_async(dispatch_get_main_queue(), ^{ fn(); }); });
     _core->setOnChange([weakSelf] { [weakSelf queueRefresh]; });
+    _core->setOnStatus([weakSelf] { [weakSelf refreshStatus]; });
     [self refresh];
     return self;
 }
@@ -115,6 +118,11 @@ static NSTextField* small(NSString* s, BOOL secondary) {
     _canvas = [[CanvasView alloc] initWithFrame:NSZeroRect];
     __weak MainWindow* weakSelf = self;
     _canvas.onDropFile = ^(NSString* path) { [weakSelf importPath:path]; };
+    mb::AppController* core = _core;
+    _canvas.onKey = ^(int dx, int dy, BOOL escape) {
+        if (escape) core->stop();
+        else if (core->phase() == mb::Phase::Laser) core->jog(dx, dy);
+    };
     _inspector = [[InspectorView alloc] initWithCore:_core];
     NSScrollView* inspScroll = [[NSScrollView alloc] init];
     inspScroll.drawsBackground = NO;
@@ -217,8 +225,115 @@ static NSTextField* small(NSString* s, BOOL secondary) {
 - (void)machineChanged:(NSPopUpButton*)p { _core->selectMachine(int(p.indexOfSelectedItem)); }
 - (void)materialChanged:(NSPopUpButton*)p { _core->selectMaterial(int(p.selectedItem.tag)); }
 - (void)primaryPressed:(id)sender {
-    if (_core->phase() != mb::Phase::Laser) _core->setPhase(mb::Phase::Laser);
-    else NSBeep();   // Gerätesteuerung folgt
+    switch (_core->primaryAction()) {
+        case mb::PrimaryAction::GoToLaser: _core->setPhase(mb::Phase::Laser); break;
+        case mb::PrimaryAction::Connect: _core->connect(); break;
+        case mb::PrimaryAction::Connecting: break;
+        case mb::PrimaryAction::StartJob: [self showPreflight]; break;
+        case mb::PrimaryAction::Pause:
+        case mb::PrimaryAction::Resume: _core->pauseOrResume(); break;
+        case mb::PrimaryAction::Unlock: _core->unlock(); break;
+    }
+}
+
+// ---------- Startprüfung ----------
+
+- (void)showPreflight {
+    auto checks = _core->preflight();
+    NSPanel* sheet = [[NSPanel alloc] initWithContentRect:NSMakeRect(0, 0, 460, 100) styleMask:NSWindowStyleMaskTitled
+                                                  backing:NSBackingStoreBuffered defer:NO];
+    NSStackView* stack = [NSStackView stackViewWithViews:@[]];
+    stack.orientation = NSUserInterfaceLayoutOrientationVertical;
+    stack.alignment = NSLayoutAttributeLeading;
+    stack.spacing = 10;
+    stack.edgeInsets = NSEdgeInsetsMake(20, 22, 20, 22);
+
+    NSTextField* title = [NSTextField labelWithString:@"Bereit zum Lasern?"];
+    title.font = [NSFont systemFontOfSize:15 weight:NSFontWeightSemibold];
+    [stack addArrangedSubview:title];
+
+    NSMutableArray<NSButton*>* boxes = [NSMutableArray array];
+    BOOL blocked = NO;
+    NSButton* start = [NSButton buttonWithTitle:@"Starten" target:nil action:nil];
+    for (const auto& c : checks) {
+        NSTextField* detail = [NSTextField wrappingLabelWithString:NS(c.detail)];
+        detail.font = [NSFont systemFontOfSize:11];
+        detail.textColor = NSColor.secondaryLabelColor;
+        NSView* head;
+        if (c.automatic) {
+            NSTextField* t = [NSTextField labelWithString:[NSString stringWithFormat:@"%@  %@", c.ok ? @"✓" : @"⚠", NS(c.text)]];
+            t.font = [NSFont systemFontOfSize:13 weight:NSFontWeightMedium];
+            t.textColor = c.ok ? NSColor.labelColor : NSColor.systemOrangeColor;
+            head = t;
+            // Nicht bereit oder außerhalb der Fläche: Start nicht möglich. Material-Hinweise nur warnen.
+            if (!c.ok && (c.text.rfind("Design", 0) == 0 || c.text.rfind("Laser", 0) == 0)) blocked = YES;
+        } else {
+            NSButton* box = [NSButton checkboxWithTitle:NS(c.text) target:nil action:nil];
+            box.font = [NSFont systemFontOfSize:13 weight:NSFontWeightMedium];
+            [boxes addObject:box];
+            head = box;
+        }
+        NSStackView* row = [NSStackView stackViewWithViews:@[head, detail]];
+        row.orientation = NSUserInterfaceLayoutOrientationVertical;
+        row.alignment = NSLayoutAttributeLeading;
+        row.spacing = 2;
+        [detail.widthAnchor constraintLessThanOrEqualToConstant:410].active = YES;
+        [stack addArrangedSubview:row];
+    }
+
+    NSButton* cancel = [NSButton buttonWithTitle:@"Abbrechen" target:nil action:nil];
+    cancel.keyEquivalent = @"\033";
+    start.keyEquivalent = @"\r";
+    start.enabled = NO;
+    NSStackView* buttons = [NSStackView stackViewWithViews:@[cancel, start]];
+    [stack addArrangedSubview:buttons];
+    [buttons.trailingAnchor constraintEqualToAnchor:stack.trailingAnchor constant:-22].active = YES;
+
+    // Starten erst, wenn alles abgehakt ist
+    void (^update)(void) = ^{
+        BOOL all = !blocked;
+        for (NSButton* b in boxes) all = all && b.state == NSControlStateValueOn;
+        start.enabled = all;
+    };
+    for (NSButton* b in boxes) { b.target = self; b.action = @selector(preflightToggled:); }
+    objc_setAssociatedObject(self, "preflightUpdate", update, OBJC_ASSOCIATION_COPY);
+
+    stack.translatesAutoresizingMaskIntoConstraints = NO;
+    sheet.contentView = [[NSView alloc] init];
+    [sheet.contentView addSubview:stack];
+    [NSLayoutConstraint activateConstraints:@[
+        [stack.topAnchor constraintEqualToAnchor:sheet.contentView.topAnchor],
+        [stack.bottomAnchor constraintEqualToAnchor:sheet.contentView.bottomAnchor],
+        [stack.leadingAnchor constraintEqualToAnchor:sheet.contentView.leadingAnchor],
+        [stack.trailingAnchor constraintEqualToAnchor:sheet.contentView.trailingAnchor],
+        [stack.widthAnchor constraintEqualToConstant:460],
+    ]];
+
+    __weak NSPanel* weakSheet = sheet;
+    __weak MainWindow* weakSelf = self;
+    cancel.target = self; cancel.action = @selector(preflightCancel:);
+    start.target = self; start.action = @selector(preflightStart:);
+    objc_setAssociatedObject(self, "preflightSheet", sheet, OBJC_ASSOCIATION_RETAIN);
+    [self beginSheet:sheet completionHandler:^(NSModalResponse r) {
+        MainWindow* strongSelf = weakSelf;
+        if (!strongSelf) return;
+        objc_setAssociatedObject(strongSelf, "preflightSheet", nil, OBJC_ASSOCIATION_RETAIN);
+        if (r == NSModalResponseOK) strongSelf->_core->startJob();
+        (void)weakSheet;
+    }];
+}
+
+- (void)preflightToggled:(id)sender {
+    void (^update)(void) = objc_getAssociatedObject(self, "preflightUpdate");
+    if (update) update();
+}
+- (void)preflightCancel:(id)sender {
+    NSWindow* s = objc_getAssociatedObject(self, "preflightSheet");
+    if (s) [self endSheet:s returnCode:NSModalResponseCancel];
+}
+- (void)preflightStart:(id)sender {
+    NSWindow* s = objc_getAssociatedObject(self, "preflightSheet");
+    if (s) [self endSheet:s returnCode:NSModalResponseOK];
 }
 
 - (void)tableViewSelectionDidChange:(NSNotification*)n {
@@ -241,6 +356,12 @@ static NSTextField* small(NSString* s, BOOL secondary) {
     if (_refreshQueued) return;
     _refreshQueued = YES;
     dispatch_async(dispatch_get_main_queue(), ^{ self->_refreshQueued = NO; [self refresh]; });
+}
+
+// Nur Statusleiste und Zeichenfläche (häufige Positionsmeldungen)
+- (void)refreshStatus {
+    _status.stringValue = NS(_core->statusText());
+    if (_core->phase() == mb::Phase::Laser) [_canvas setRenderList:_core->renderList()];
 }
 
 - (void)refresh {

@@ -2,12 +2,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "app/AppController.hpp"
 #include "device/Grbl.hpp"
+#include "device/GrblDevice.hpp"
 #include "io/SvgImport.hpp"
 #include "job/Job.hpp"
 #include "profiles/Profiles.hpp"
 #include "util/Json.hpp"
 
+#include <chrono>
 #include <cmath>
+#include <deque>
+#include <mutex>
+#include <thread>
 #include <cstdio>
 #include <functional>
 #include <string>
@@ -245,6 +250,160 @@ TEST(controller_imports_and_merges_layers) {
     c.undo();
     CHECK(c.layerRows().size() == 3);   // zurück zum Beispiel
     CHECK(!c.importFile("/tmp/datei.pdf").ok);
+}
+
+// ---------- Gerät mit simulierter GRBL-Steuerung ----------
+
+// Bestätigt Zeilen verzögert (eine pro Lesevorgang) und merkt sich die Pufferbelegung.
+class FakeGrbl : public grbl::Transport {
+public:
+    std::vector<std::string> lines;   // empfangene Zeilen
+    std::string realtimeBytes;
+    size_t maxBuffered = 0;
+    bool held = false;
+
+    bool write(const std::string& d) override {
+        for (char ch : d) {
+            if (partial_.empty() && (ch == '?' || ch == '!' || ch == '~' || ch == 0x18 || uint8_t(ch) == 0x85)) {
+                realtimeBytes += ch;
+                if (ch == '?') out_.push_back(std::string("<") + (held ? "Hold:0" : unacked_.empty() ? "Idle" : "Run") + "|MPos:10.000,20.000,0.000|FS:0,0>");
+                if (ch == '!') held = true;
+                if (ch == '~') held = false;
+                if (ch == 0x18) { unacked_.clear(); buffered_ = 0; out_.push_back("Grbl 1.1h ['$' for help]"); }
+                continue;
+            }
+            if (ch == '\n') {
+                lines.push_back(partial_);
+                buffered_ += partial_.size() + 1;
+                maxBuffered = std::max(maxBuffered, buffered_);
+                unacked_.push_back(partial_);
+                partial_.clear();
+            } else partial_ += ch;
+        }
+        return true;
+    }
+    std::optional<std::string> readLine(int timeoutMs) override {
+        if (out_.empty() && !unacked_.empty() && !held) {
+            std::string l = unacked_.front();
+            unacked_.pop_front();
+            buffered_ -= l.size() + 1;
+            if (l == "$I") { out_.push_back("[VER:1.1h.20231023:]"); out_.push_back("[PRODUCER:Test]"); }
+            if (l == "$$") out_.push_back("$130=410.000");
+            out_.push_back(l.rfind("G99", 0) == 0 ? "error:20" : "ok");
+        }
+        if (out_.empty()) { std::this_thread::sleep_for(std::chrono::milliseconds(std::min(timeoutMs, 2))); return std::nullopt; }
+        std::string l = out_.front();
+        out_.pop_front();
+        return l;
+    }
+    void close() override {}
+    std::string description() const override { return "fake"; }
+
+private:
+    std::string partial_;
+    std::deque<std::string> unacked_, out_;
+    size_t buffered_ = 0;
+};
+
+struct EventLog {
+    std::mutex m;
+    std::vector<grbl::DeviceEvent> events;
+    void add(const grbl::DeviceEvent& e) { std::lock_guard<std::mutex> l(m); events.push_back(e); }
+    bool has(grbl::DeviceEvent::Kind k) { std::lock_guard<std::mutex> l(m); for (auto& e : events) if (e.kind == k) return true; return false; }
+    bool waitFor(grbl::DeviceEvent::Kind k, int ms = 5000) {
+        for (int i = 0; i < ms / 5; ++i) { if (has(k)) return true; std::this_thread::sleep_for(std::chrono::milliseconds(5)); }
+        return false;
+    }
+};
+
+TEST(device_streams_job_within_rx_buffer) {
+    EventLog log;
+    auto fake = std::make_unique<FakeGrbl>();
+    FakeGrbl* f = fake.get();
+    grbl::GrblDevice dev([&](const grbl::DeviceEvent& e) { log.add(e); }, 120);
+    dev.attach(std::move(fake), 0);
+    CHECK(log.waitFor(grbl::DeviceEvent::Kind::Connected));
+    std::vector<std::string> job;
+    for (int i = 0; i < 300; ++i) job.push_back("G1 X" + std::to_string(i) + ".500 Y12.250 F1000 S500");
+    dev.startJob(job);
+    CHECK(log.waitFor(grbl::DeviceEvent::Kind::JobFinished));
+    dev.detach();
+    CHECK(f->maxBuffered <= 120);
+    CHECK(f->maxBuffered > 60);   // Puffer wird auch wirklich genutzt
+    size_t jobLines = 0;
+    for (auto& l : f->lines) if (l.rfind("G1", 0) == 0) { CHECK(l == job[jobLines]); ++jobLines; }
+    CHECK(jobLines == 300);
+    CHECK(log.has(grbl::DeviceEvent::Kind::Identity));
+    CHECK(log.has(grbl::DeviceEvent::Kind::Setting));
+    CHECK(log.has(grbl::DeviceEvent::Kind::Disconnected));
+}
+
+TEST(device_abort_stops_and_resets) {
+    EventLog log;
+    auto fake = std::make_unique<FakeGrbl>();
+    FakeGrbl* f = fake.get();
+    grbl::GrblDevice dev([&](const grbl::DeviceEvent& e) { log.add(e); }, 120);
+    dev.attach(std::move(fake), 0);
+    CHECK(log.waitFor(grbl::DeviceEvent::Kind::Connected));
+    std::vector<std::string> job(5000, "G1 X1.000 Y1.000 F1000 S500");
+    dev.startJob(job);
+    CHECK(log.waitFor(grbl::DeviceEvent::Kind::Progress));
+    dev.abortJob("Test");
+    CHECK(log.waitFor(grbl::DeviceEvent::Kind::JobAborted));
+    CHECK(!dev.jobActive());
+    dev.detach();
+    CHECK(f->realtimeBytes.find('!') != std::string::npos);
+    CHECK(f->realtimeBytes.find(char(0x18)) != std::string::npos);   // Reset schaltet den Laser ab
+    size_t sent = 0;
+    for (auto& l : f->lines) if (l.rfind("G1", 0) == 0) ++sent;
+    CHECK(sent < 5000);
+}
+
+TEST(device_error_in_job_aborts) {
+    EventLog log;
+    auto fake = std::make_unique<FakeGrbl>();
+    grbl::GrblDevice dev([&](const grbl::DeviceEvent& e) { log.add(e); }, 120);
+    dev.attach(std::move(fake), 0);
+    CHECK(log.waitFor(grbl::DeviceEvent::Kind::Connected));
+    dev.startJob({"G1 X1 F100 S10", "G99", "G1 X2 F100 S10"});
+    CHECK(log.waitFor(grbl::DeviceEvent::Kind::JobAborted));
+    CHECK(log.has(grbl::DeviceEvent::Kind::Error));
+    dev.detach();
+}
+
+TEST(device_detach_during_job_stops_laser) {
+    EventLog log;
+    auto fake = std::make_unique<FakeGrbl>();
+    FakeGrbl* f = fake.get();
+    auto dev = std::make_unique<grbl::GrblDevice>([&](const grbl::DeviceEvent& e) { log.add(e); }, 120);
+    dev->attach(std::move(fake), 0);
+    CHECK(log.waitFor(grbl::DeviceEvent::Kind::Connected));
+    dev->startJob(std::vector<std::string>(2000, "G1 X1 F100 S10"));
+    CHECK(log.waitFor(grbl::DeviceEvent::Kind::Progress));
+    dev->detach();
+    CHECK(f->realtimeBytes.find(char(0x18)) != std::string::npos);
+}
+
+TEST(controller_preflight_without_device) {
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    c.setPhase(Phase::Laser);
+    CHECK(c.primaryAction() == PrimaryAction::Connect);
+    auto items = c.preflight();
+    bool laserNotReady = false, manual = false;
+    for (auto& ch : items) {
+        if (ch.text == "Laser bereit") laserNotReady = !ch.ok;
+        if (!ch.automatic) manual = true;
+    }
+    CHECK(laserNotReady);
+    CHECK(manual);
+    GcodeOptions o; o.offset = {100, 50};
+    MachineProfile m; m.opticalPowerW = 10; m.powerClass = "diode-10w-445nm";
+    MaterialProfile mat; mat.intents[Intent::Mark] = {1000.0, 10.0, {}, 1, {}, {}, {}};
+    Document d; d.layers = {{"L", {}, Intent::Mark, true, {}}};
+    d.shapes = {{"s", 0, {{{0, 0}, {10, 0}}, false}}};
+    std::string g = writeGcode(JobBuilder(m, mat).build(d), o);
+    CHECK(g.find("G1 X110.000 Y50.000") != std::string::npos);
+    CHECK(g.find("G0 X100.000 Y50.000") != std::string::npos);   // Rückkehr zum Startpunkt
 }
 
 int main() {
