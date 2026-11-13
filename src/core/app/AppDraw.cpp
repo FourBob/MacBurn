@@ -19,6 +19,7 @@ const char* toolName(Tool t) {
         case Tool::Polygon: return "Polygon";
         case Tool::Star: return "Stern";
         case Tool::Polyline: return "Polylinie";
+        case Tool::Text: return "Text";
     }
     return "";
 }
@@ -46,6 +47,7 @@ std::vector<ToolItem> AppController::toolItems() const {
         {Tool::Polygon, "hexagon", "Polygon", "P"},
         {Tool::Star, "star", "Stern", "S"},
         {Tool::Polyline, "point.3.connected.trianglepath.dotted", "Polylinie", "N"},
+        {Tool::Text, "textformat", "Text", "T"},
     };
     for (auto& i : items) i.selected = i.tool == tool_;
     return items;
@@ -54,7 +56,8 @@ std::vector<ToolItem> AppController::toolItems() const {
 void AppController::setTool(Tool t) {
     cancelCreation();
     tool_ = t;
-    if (t != Tool::Select) message_ = std::string(toolName(t)) +
+    if (t == Tool::Text) message_ = "Text: auf die Fläche klicken und lostippen.";
+    else if (t != Tool::Select) message_ = std::string(toolName(t)) +
         (t == Tool::Polyline ? ": Punkte klicken, Doppelklick oder ↩ beendet, Esc bricht ab."
                              : ": auf der Fläche ziehen, ⇧ für gleichmäßige Form. Ein Klick legt sie in 20 mm an.");
     else message_.clear();
@@ -256,7 +259,7 @@ bool AppController::cancelCreation() {
 }
 
 void AppController::addToolFields(std::vector<Field>& f) const {
-    if (tool_ == Tool::Select) return;
+    if (tool_ == Tool::Select || tool_ == Tool::Text) return;   // Text hat eigene Felder
     f.push_back({Field::Kind::Header, "", std::string("Werkzeug: ") + toolName(tool_)});
     auto num = [&](const char* key, const char* label, double v, double lo, double hi, double step, const char* unit) {
         Field x{Field::Kind::Number, key, label};

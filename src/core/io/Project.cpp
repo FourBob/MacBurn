@@ -44,6 +44,16 @@ std::string writeProject(const ProjectData& p) {
             {"object", Value::number(s.object)}, {"part", Value::number(s.part)}, {"closed", Value::boolean(s.path.closed)},
             {"points", Value::array(std::move(pts))}}));
     }
+    std::vector<Value> texts;
+    for (const auto& [part, t] : p.doc.texts) {
+        texts.push_back(Value::object({
+            {"part", Value::number(part)}, {"text", Value::string(t.text)}, {"family", Value::string(t.family)},
+            {"style", Value::string(t.style)}, {"capHeightMm", Value::number(t.capHeightMm)},
+            {"align", Value::number(t.align)}, {"letterSpacingMm", Value::number(t.letterSpacingMm)},
+            {"lineSpacing", Value::number(t.lineSpacing)},
+            {"matrix", Value::array({Value::number(t.m.a), Value::number(t.m.b), Value::number(t.m.c),
+                                     Value::number(t.m.d), Value::number(t.m.e), Value::number(t.m.f)})}}));
+    }
     std::map<std::string, Value> laser = {
         {"machine", Value::string(p.machineId)}, {"variant", Value::string(p.variantId)},
         {"material", Value::string(p.materialId)},
@@ -53,7 +63,8 @@ std::string writeProject(const ProjectData& p) {
     return json::write(Value::object({
         {"format", Value::string("macburn")}, {"version", Value::number(kProjectFormatVersion)},
         {"laser", Value::object(std::move(laser))},
-        {"layers", Value::array(std::move(layers))}, {"shapes", Value::array(std::move(shapes))}}));
+        {"layers", Value::array(std::move(layers))}, {"shapes", Value::array(std::move(shapes))},
+        {"texts", Value::array(std::move(texts))}}));
 }
 
 std::optional<ProjectData> readProject(const std::string& text, std::string* error) {
@@ -90,6 +101,20 @@ std::optional<ProjectData> readProject(const std::string& text, std::string* err
         if (shape.layer >= p.doc.layers.size()) return fail("Die Datei ist beschädigt (Form ohne gültige Ebene).");
         if (shape.path.points.size() >= 2) p.doc.shapes.push_back(std::move(shape));
     }
+    for (const auto& t : (*v)["texts"].asArray()) {
+        TextSpec spec;
+        spec.text = t["text"].asString();
+        spec.family = t["family"].asString(spec.family);
+        spec.style = t["style"].asString(spec.style);
+        spec.capHeightMm = t["capHeightMm"].asNumber(spec.capHeightMm);
+        spec.align = std::clamp(int(t["align"].asNumber(0)), 0, 2);
+        spec.letterSpacingMm = t["letterSpacingMm"].asNumber(0);
+        spec.lineSpacing = t["lineSpacing"].asNumber(1.2);
+        const auto& m = t["matrix"].asArray();
+        if (m.size() == 6) spec.m = {m[0].asNumber(), m[1].asNumber(), m[2].asNumber(), m[3].asNumber(), m[4].asNumber(), m[5].asNumber()};
+        p.doc.texts[uint32_t(std::max(0.0, t["part"].asNumber()))] = spec;
+    }
+    p.doc.pruneTexts();
     const auto& laser = (*v)["laser"];
     p.machineId = laser["machine"].asString();
     p.variantId = laser["variant"].asString();

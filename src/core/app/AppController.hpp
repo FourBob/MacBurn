@@ -6,6 +6,7 @@
 
 #include "device/GrblDevice.hpp"
 #include "document/Document.hpp"
+#include "text/Font.hpp"
 #include "job/Job.hpp"
 #include "profiles/Profiles.hpp"
 #include "render/RenderList.hpp"
@@ -35,7 +36,8 @@ struct LayerRow {
 // Generischer Inspektor: Der Kern beschreibt Felder, die Oberfläche baut sie.
 struct Field {
     // ButtonRow: options = "symbol|Beschriftung"; Klick → pressButton(key + ":" + Index)
-    enum class Kind { Header, Info, Choice, Number, Toggle, Button, JogPad, Progress, Anchor, ButtonRow } kind = Kind::Info;
+    // TextArea: mehrzeiliger Text in `text`; Eingabe → setString(key, …)
+    enum class Kind { Header, Info, Choice, Number, Toggle, Button, JogPad, Progress, Anchor, ButtonRow, TextArea } kind = Kind::Info;
     std::string key, label;
     std::vector<std::string> options;   // Choice
     int selected = 0;                   // Choice
@@ -44,6 +46,8 @@ struct Field {
     bool on = false;                    // Toggle
     bool highlight = false;             // geänderter Wert / Warnung
     bool enabled = true;
+    std::string text;                   // TextArea
+    bool focus = false;                 // Tastaturfokus hierher (z. B. neuer Text)
 
     bool operator==(const Field&) const = default;
 };
@@ -56,7 +60,7 @@ struct PreflightCheck {
 };
 
 // Zeichenwerkzeuge
-enum class Tool { Select, Line, Rect, Ellipse, Triangle, Polygon, Star, Polyline };
+enum class Tool { Select, Line, Rect, Ellipse, Triangle, Polygon, Star, Polyline, Text };
 
 struct ToolItem {
     Tool tool;
@@ -90,6 +94,7 @@ public:
     // Eingabe als Text: Komma/Punkt, Rechnen (100/3), Einheiten (2in, 1,5cm). false = ungültig
     bool setNumberText(const std::string& key, const std::string& text);
     void setToggle(const std::string& key, bool on);
+    void setString(const std::string& key, const std::string& value);
     void pressButton(const std::string& key);
     void undo();
     void redo();
@@ -245,6 +250,22 @@ private:
     Polyline shapeFor(Vec2 a, Vec2 b, bool shift) const;
     size_t drawingLayer();
     void addToolFields(std::vector<Field>& f) const;
+
+    // Text
+    mutable std::unique_ptr<FontProvider> fonts_;
+    mutable std::vector<std::string> familyCache_;
+    TextSpec textTemplate_;                  // Einstellungen für den nächsten neuen Text
+    bool focusText_ = false;
+    const FontProvider& fonts() const;
+    const std::vector<std::string>& families() const;
+    std::optional<uint32_t> selectedTextPart() const;
+    size_t textLayer();
+    void createText(Vec2 at);
+    // keepCenter: Mitte des Textblocks bleibt stehen (z. B. beim Ändern der Ausrichtung)
+    void editText(const std::function<void(TextSpec&)>& fn, const std::string& label, bool keepCenter = false);
+    void addTextFields(std::vector<Field>& f) const;
+    void convertTextToPaths();
+    static bool regenerateText(Document& d, uint32_t part, const FontProvider& fonts);
     std::vector<Vec2> selectionHandles() const;
     std::optional<Drag> drag_;
 

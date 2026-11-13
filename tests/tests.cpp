@@ -5,6 +5,7 @@
 #include "device/GrblDevice.hpp"
 #include "geometry/Boolean.hpp"
 #include "io/Project.hpp"
+#include "text/Font.hpp"
 #include "io/SvgImport.hpp"
 #include "job/Job.hpp"
 #include "profiles/Profiles.hpp"
@@ -974,6 +975,86 @@ TEST(reference_point_for_position_and_size) {
     c.setChoice("refPoint", 6);                     // unten links
     for (auto& f : c.inspector()) { if (f.key == "selX") x = f.value; if (f.key == "selY") y = f.value; }
     NEAR(x, 190); NEAR(y, 60);                      // 20 × 40 um die Mitte (200/80)
+}
+
+// ---------- Text ----------
+
+TEST(font_outline_cap_height_and_alignment) {
+    auto fonts = makeSystemFontProvider();
+    CHECK(!fonts->families().empty());
+    CHECK(!fonts->styles("Helvetica Neue").empty());
+    TextSpec t;
+    t.text = "HEFT";                         // nur gerade Großbuchstaben: Höhe = Versalhöhe
+    t.capHeightMm = 10;
+    auto out = fonts->outline(t);
+    CHECK(!out.empty());
+    Polyline all;
+    for (auto& p : out) all.points.insert(all.points.end(), p.points.begin(), p.points.end());
+    Rect b = all.bounds();
+    NEARTOL(b.h, 10, 0.05);
+    NEARTOL(b.y, 0, 0.05);                   // Grundlinie bei 0
+    t.align = 1;
+    auto centered = fonts->outline(t);
+    Polyline c;
+    for (auto& p : centered) c.points.insert(c.points.end(), p.points.begin(), p.points.end());
+    NEARTOL(c.bounds().x + c.bounds().w / 2, 0, 0.6);   // mittig um 0 (Seitenabstand der Buchstaben)
+    t.family = "Gibt Es Nicht";
+    CHECK(fonts->outline(t).empty());
+}
+
+TEST(text_tool_edit_after_transform) {
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    c.newDocument();
+    c.setTool(Tool::Text);
+    c.pointerDown({50, 100}, 0.5, false);
+    CHECK(c.hasSelection());
+    CHECK(c.layerRows().size() == 1 && c.layerRows()[0].intent == "Gravieren");   // Text kommt in eine Gravurebene
+    bool area = false;
+    for (auto& f : c.inspector()) if (f.kind == Field::Kind::TextArea) { area = true; CHECK(f.focus); }
+    CHECK(area);
+    c.setString("textContent", "HEFT");
+    Rect r = selRect(c);
+    NEARTOL(r.h, 10, 0.05);
+    double w = r.w;
+    c.rotateSelection(90);                   // drehen – Text bleibt bearbeitbar
+    r = selRect(c);
+    NEARTOL(r.w, 10, 0.05); NEARTOL(r.h, w, 0.05);
+    c.setString("textContent", "HEFTHEFT");  // doppelt so lang, weiterhin gedreht
+    r = selRect(c);
+    NEARTOL(r.w, 10, 0.05);
+    CHECK(r.h > 1.9 * w);
+    c.setNumber("textCap", 20);              // Schrifthöhe
+    NEARTOL(selRect(c).w, 20, 0.1);
+    c.undo();
+    c.selectAll();                           // Widerrufen hebt die Auswahl auf
+    NEARTOL(selRect(c).w, 10, 0.05);
+}
+
+TEST(text_saved_duplicated_converted) {
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    c.newDocument();
+    c.setTool(Tool::Text);
+    c.pointerDown({20, 20}, 0.5, false);
+    c.setString("textContent", "MacBurn");
+    c.setNumber("textCap", 8);
+    std::string file = tempPath("text.macburn");
+    CHECK(c.saveProject(file).ok);
+    AppController d(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    CHECK(d.openFile(file).ok);
+    d.selectAll();
+    bool editable = false;
+    for (auto& f : d.inspector()) if (f.kind == Field::Kind::TextArea) { editable = true; CHECK(f.text == "MacBurn"); }
+    CHECK(editable);
+    d.duplicateSelection();                  // Kopie ist ebenfalls Text
+    d.setString("textContent", "Kopie");
+    bool copyText = false;
+    for (auto& f : d.inspector()) if (f.kind == Field::Kind::TextArea) copyText = f.text == "Kopie";
+    CHECK(copyText);
+    d.pressButton("textToPaths");
+    bool still = false;
+    for (auto& f : d.inspector()) if (f.kind == Field::Kind::TextArea) still = true;
+    CHECK(!still);                           // jetzt normale Formen
+    std::filesystem::remove(file);
 }
 
 int main() {

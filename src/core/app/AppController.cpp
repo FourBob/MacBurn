@@ -146,6 +146,22 @@ void AppController::setChoice(const std::string& key, int index) {
         jogStep_ = index; changed();
     } else if (key == "origin") {
         origin_ = index; settingsDirty_ = true; changed();
+    } else if (key == "textFamily") {
+        const auto& fams = families();
+        if (index < 0 || index >= int(fams.size())) return;
+        std::string fam = fams[size_t(index)];
+        auto styles = fonts().styles(fam);
+        editText([&](TextSpec& t) {
+            t.family = fam;
+            // Schnitt behalten, wenn es ihn gibt; sonst „Regular“ oder den ersten
+            if (std::find(styles.begin(), styles.end(), t.style) == styles.end())
+                t.style = std::find(styles.begin(), styles.end(), "Regular") != styles.end() ? "Regular"
+                        : styles.empty() ? "" : styles.front();
+        }, "Schrift");
+    } else if (key == "textStyle") {
+        TextSpec cur = selectedTextPart() ? doc_.texts.at(*selectedTextPart()) : textTemplate_;
+        auto styles = fonts().styles(cur.family);
+        if (index >= 0 && index < int(styles.size())) editText([&](TextSpec& t) { t.style = styles[size_t(index)]; }, "Schriftschnitt");
     } else if (key == "refPoint") {
         refPoint_ = std::clamp(index, 0, 8); changed();
     } else if (key == "anchor") {
@@ -154,6 +170,9 @@ void AppController::setChoice(const std::string& key, int index) {
 }
 
 void AppController::setNumber(const std::string& key, double v) {
+    if (key == "textCap") { editText([&](TextSpec& t) { t.capHeightMm = std::max(0.1, v); }, "Schrifthöhe"); return; }
+    if (key == "textSpacing") { editText([&](TextSpec& t) { t.letterSpacingMm = v; }, "Zeichenabstand"); return; }
+    if (key == "textLine") { editText([&](TextSpec& t) { t.lineSpacing = std::clamp(v / 100, 0.3, 5.0); }, "Zeilenabstand"); return; }
     if (key == "toolRadius") { rectRadius_ = std::max(0.0, v); changed(); return; }
     if (key == "toolX") { toolX_ = v; changed(); return; }
     if (key == "toolY") { toolY_ = v; changed(); return; }
@@ -187,6 +206,13 @@ bool AppController::setNumberText(const std::string& key, const std::string& tex
     return true;
 }
 
+void AppController::setString(const std::string& key, const std::string& value) {
+    if (key == "textContent") {
+        focusText_ = false;
+        editText([&](TextSpec& t) { t.text = value; }, "Text ändern");
+    }
+}
+
 void AppController::setToggle(const std::string& key, bool on) {
     if (key == "lockRatio") { lockRatio_ = on; changed(); return; }
     if (key == "output") editLayer(on ? "Ebene ausgeben" : "Ebene nicht ausgeben", [on](Layer& l) { l.output = on; });
@@ -194,6 +220,12 @@ void AppController::setToggle(const std::string& key, bool on) {
 
 void AppController::pressButton(const std::string& key) {
     if (key == "toolSelect") { setTool(Tool::Select); return; }
+    if (key == "textToPaths") { convertTextToPaths(); return; }
+    if (key.rfind("textAlign:", 0) == 0) {
+        int a = std::clamp(std::atoi(key.c_str() + 10), 0, 2);
+        editText([&](TextSpec& t) { t.align = a; }, "Text ausrichten", true);   // Block bleibt an Ort und Stelle
+        return;
+    }
     if (key == "toolCreate") { createFromFields(std::nullopt); return; }
     if (key == "rot90" || key == "rotR") { rotateSelection(-90); return; }
     if (key == "rotL") { rotateSelection(90); return; }
@@ -465,6 +497,7 @@ std::vector<Field> AppController::inspector() const {
     }
 
     addToolFields(f);
+    addTextFields(f);
     if (tool_ == Tool::Select) addSelectionFields(f);
     if (layer_ < 0 || layer_ >= int(doc_.layers.size())) return f;
     const Layer& l = doc_.layers[size_t(layer_)];

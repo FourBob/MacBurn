@@ -15,6 +15,7 @@ void AppController::editDoc(const std::string& label, const std::function<void(D
     if (!canEdit()) return;
     Document before = doc_, after = doc_;
     fn(after);
+    after.pruneTexts();   // Texte, deren Buchstaben verschwunden sind (Kombinieren, Löschen)
     undo_.perform(doc_, {label, [after](Document& d) { d = after; }, [before](Document& d) { d = before; }});
     isSample_ = false;
     changed();
@@ -46,6 +47,7 @@ std::vector<Vec2> AppController::selectionHandles() const {
 
 void AppController::pointerDown(Vec2 p, double tol, bool extend) {
     if (!canEdit()) return;
+    if (tool_ == Tool::Text && phase_ != Phase::Laser) { createText(p); return; }
     if (tool_ != Tool::Select && phase_ != Phase::Laser) { beginCreate(p); return; }
     // Zuerst die Anfasser der aktuellen Auswahl
     if (!selection_.empty() && !extend && phase_ != Phase::Laser) {
@@ -86,17 +88,13 @@ void AppController::pointerDrag(Vec2 p, bool shift) {
     const Rect& b = drag_->box;
 
     if (drag_->handle < 0) {                          // verschieben
-        doc_.transform(selection_, [d](Vec2 q) { return q + d; });
+        doc_.transform(selection_, Affine::translate(d));
     } else if (drag_->handle == 8) {                  // drehen um die Mitte
         Vec2 c{b.x + b.w / 2, b.y + b.h / 2};
         double a0 = std::atan2(drag_->start.y - c.y, drag_->start.x - c.x);
         double a = std::atan2(p.y - c.y, p.x - c.x) - a0;
         if (shift) a = std::round(a / (M_PI / 12)) * (M_PI / 12);   // 15°-Schritte
-        double cs = std::cos(a), sn = std::sin(a);
-        doc_.transform(selection_, [=](Vec2 q) {
-            Vec2 v = q - c;
-            return Vec2{c.x + cs * v.x - sn * v.y, c.y + sn * v.x + cs * v.y};
-        });
+        doc_.transform(selection_, Affine::rotateAround(c, a));
         message_ = "Drehung " + std::to_string(int(std::lround(a * 180 / M_PI))) + "°";
     } else {                                          // skalieren gegenüber dem Anfasser
         int h = drag_->handle;
@@ -115,9 +113,7 @@ void AppController::pointerDrag(Vec2 p, bool shift) {
         }
         sx = std::max(sx, 0.01);
         sy = std::max(sy, 0.01);
-        doc_.transform(selection_, [=](Vec2 q) {
-            return Vec2{anchor.x + (q.x - anchor.x) * sx, anchor.y + (q.y - anchor.y) * sy};
-        });
+        doc_.transform(selection_, Affine::scaleAround(anchor, sx, sy));
     }
     changed();
 }
@@ -139,7 +135,7 @@ void AppController::pointerUp() {
 
 void AppController::nudge(double dx, double dy) {
     if (selection_.empty()) return;
-    editDoc("Verschieben", [&](Document& d) { d.transform(selection_, [dx, dy](Vec2 q) { return q + Vec2{dx, dy}; }); });
+    editDoc("Verschieben", [&](Document& d) { d.transform(selection_, Affine::translate(dx, dy)); });
 }
 
 void AppController::selectAll() {
@@ -184,6 +180,8 @@ void AppController::duplicateSelection() {
             copies.push_back(c);
         }
         for (auto& [from, to] : ids) fresh.insert(to);
+        for (auto& [from, to] : parts)   // Texte bleiben auch als Kopie bearbeitbar
+            if (d.texts.count(from)) { TextSpec t = d.texts[from]; t.m = Affine::translate(5, -5) * t.m; d.texts[to] = t; }
         d.shapes.insert(d.shapes.end(), copies.begin(), copies.end());
     });
     selection_ = fresh;
@@ -194,18 +192,15 @@ void AppController::rotateSelection(double deg) {
     if (selection_.empty()) return;
     Rect b = doc_.bounds(selection_);
     Vec2 c{b.x + b.w / 2, b.y + b.h / 2};
-    double r = deg * M_PI / 180, cs = std::cos(r), sn = std::sin(r);
+    double r = deg * M_PI / 180;
     Rect wa = workArea();
     editDoc("Drehen", [&](Document& d) {
-        d.transform(selection_, [=](Vec2 q) {
-            Vec2 v = q - c;
-            return Vec2{c.x + cs * v.x - sn * v.y, c.y + sn * v.x + cs * v.y};
-        });
+        d.transform(selection_, Affine::rotateAround(c, r));
         // Lag es vorher auf der Fläche, soll es auch gedreht dort bleiben (falls es hineinpasst).
         Rect nb = d.bounds(selection_);
         if (wa.contains(b) && nb.w <= wa.w && nb.h <= wa.h) {
             Vec2 shift{std::clamp(nb.x, wa.x, wa.x + wa.w - nb.w) - nb.x, std::clamp(nb.y, wa.y, wa.y + wa.h - nb.h) - nb.y};
-            if (shift.length() > 1e-9) d.transform(selection_, [shift](Vec2 q) { return q + shift; });
+            if (shift.length() > 1e-9) d.transform(selection_, Affine::translate(shift));
         }
     });
 }
@@ -215,7 +210,7 @@ void AppController::flipSelection(bool horizontal) {
     Rect b = doc_.bounds(selection_);
     double cx = b.x + b.w / 2, cy = b.y + b.h / 2;
     editDoc(horizontal ? "Horizontal spiegeln" : "Vertikal spiegeln", [&](Document& d) {
-        d.transform(selection_, [=](Vec2 q) { return horizontal ? Vec2{2 * cx - q.x, q.y} : Vec2{q.x, 2 * cy - q.y}; });
+        d.transform(selection_, horizontal ? Affine::scaleAround({cx, cy}, -1, 1) : Affine::scaleAround({cx, cy}, 1, -1));
     });
 }
 
@@ -223,7 +218,7 @@ void AppController::centerSelection() {
     if (selection_.empty()) return;
     Rect b = doc_.bounds(selection_), wa = workArea();
     Vec2 d{wa.x + wa.w / 2 - (b.x + b.w / 2), wa.y + wa.h / 2 - (b.y + b.h / 2)};
-    editDoc("Auf der Fläche zentrieren", [&](Document& doc) { doc.transform(selection_, [d](Vec2 q) { return q + d; }); });
+    editDoc("Auf der Fläche zentrieren", [&](Document& doc) { doc.transform(selection_, Affine::translate(d)); });
 }
 
 void AppController::skewSelection(double degX, double degY) {
@@ -233,7 +228,7 @@ void AppController::skewSelection(double degX, double degY) {
     double tx = std::tan(std::clamp(degX, -80.0, 80.0) * M_PI / 180);
     double ty = std::tan(std::clamp(degY, -80.0, 80.0) * M_PI / 180);
     editDoc("Neigen", [&](Document& d) {
-        d.transform(selection_, [=](Vec2 q) { return Vec2{q.x + tx * (q.y - c.y), q.y + ty * (q.x - c.x)}; });
+        d.transform(selection_, Affine::skewAround(c, tx, ty));
     });
 }
 
@@ -256,7 +251,7 @@ void AppController::alignSelection(int mode) {
                 case 4: delta.y = ref.y + ref.h / 2 - (b.y + b.h / 2); break;
                 case 5: delta.y = ref.y - b.y; break;
             }
-            d.transform(ObjectSet{o}, [delta](Vec2 q) { return q + delta; });
+            d.transform(ObjectSet{o}, Affine::translate(delta));
         }
     });
 }
@@ -278,7 +273,7 @@ void AppController::distributeSelection(bool horizontal) {
         double pos = start;
         for (auto& [o, r] : items) {
             double delta = pos - lo(r);
-            d.transform(ObjectSet{o}, [=](Vec2 q) { return horizontal ? Vec2{q.x + delta, q.y} : Vec2{q.x, q.y + delta}; });
+            d.transform(ObjectSet{o}, horizontal ? Affine::translate(delta, 0) : Affine::translate(0, delta));
             pos += len(r) + gap;
         }
     });
@@ -469,6 +464,7 @@ void AppController::ungroupSelection() {
             for (auto& s : d.shapes) {
                 if (s.object != obj) continue;
                 if (byShape) {
+                    d.texts.erase(s.part);   // Buchstaben einzeln: Text wird zu Pfaden
                     s.object = first ? obj : next++;
                     if (!first) s.part = nextPart++;
                     first = false;
@@ -494,7 +490,7 @@ void AppController::setSelectionNumber(const std::string& key, double v) {
     Vec2 ref = anchorPoint(b, refPoint_);
     if (key == "selX" || key == "selY") {
         Vec2 d = key == "selX" ? Vec2{v - ref.x, 0} : Vec2{0, v - ref.y};
-        editDoc("Position ändern", [&](Document& doc) { doc.transform(selection_, [d](Vec2 q) { return q + d; }); });
+        editDoc("Position ändern", [&](Document& doc) { doc.transform(selection_, Affine::translate(d)); });
         return;
     }
     // Größe: der Bezugspunkt bleibt stehen
@@ -503,7 +499,7 @@ void AppController::setSelectionNumber(const std::string& key, double v) {
     if (key == "selW" && b.w > 1e-9) { sx = v / b.w; if (lockRatio_) sy = sx; }
     if (key == "selH" && b.h > 1e-9) { sy = v / b.h; if (lockRatio_) sx = sy; }
     editDoc("Größe ändern", [&](Document& doc) {
-        doc.transform(selection_, [=](Vec2 q) { return Vec2{ref.x + (q.x - ref.x) * sx, ref.y + (q.y - ref.y) * sy}; });
+        doc.transform(selection_, Affine::scaleAround(ref, sx, sy));
     });
 }
 

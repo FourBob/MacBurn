@@ -58,7 +58,7 @@ Wie Drucker → Filament beim 3D-Druck: Oben links wählst du die Maschine, daru
 *Ablage › Importieren …* (⌘I), Datei auf die Fläche ziehen oder im Finder *Öffnen mit › MacBurn*.
 Jede Farbe wird zu einer Ebene. Gefüllte Flächen werden graviert, geschlossene Konturen geschnitten.
 Enthält eine Farbe offene Linien, wird sie nur markiert – MacBurn schneidet nie unbeabsichtigt.
-Texte bitte vorher in Pfade umwandeln. Beispiele: [examples/schild.svg](examples/schild.svg),
+Texte in SVG-Dateien bitte vorher im Zeichenprogramm in Pfade umwandeln. Beispiele: [examples/schild.svg](examples/schild.svg),
 [examples/test-30mm.svg](examples/test-30mm.svg) (kleiner Testauftrag, ca. 1:20 min).
 
 ### Zeichnen
@@ -75,6 +75,7 @@ Die Werkzeugleiste links auf der Zeichenfläche (oder die Taste, solange die Fl�
 | Polygon | P | wie Dreieck; Eckenzahl im Inspektor |
 | Stern | S | wie Dreieck; Zacken und Innenradius im Inspektor |
 | Polylinie | N | Punkte klicken; Doppelklick oder ↩ beendet, Klick auf den Startpunkt schließt, Esc bricht ab |
+| Text | T | klicken (Grundlinie beginnt dort) und lostippen |
 
 **Genaue Maße:** Ist ein Werkzeug aktiv, zeigt der Inspektor seine Maße – X/Y und Breite/Höhe (Rechteck,
 Ellipse, Eckenradius), Mittelpunkt, Durchmesser und Drehung (Dreieck, Polygon, Stern) bzw. Start, Länge und
@@ -86,6 +87,15 @@ und sind danach ausgewählt.
 
 **Zahlenfelder rechnen mit:** Komma oder Punkt, `100/3`, `25+12,5`, `(10+2)*3`, Einheiten `mm`, `cm`, `in`, `pt`.
 Angezeigt werden bis zu drei Nachkommastellen.
+
+### Text
+
+Alle auf dem Mac installierten Schriften. Im Inspektor: Text (⌥↩ für eine neue Zeile), Schrift, Schnitt,
+**Höhe der Großbuchstaben in mm**, Zeichen- und Zeilenabstand, Ausrichtung. Text kommt in eine Gravurebene
+(gewählte Ebene, wenn sie graviert oder markiert; sonst die erste Gravurebene, notfalls neu angelegt).
+
+Text bleibt bearbeitbar – auch nach Verschieben, Drehen, Skalieren, Spiegeln, Duplizieren und nach dem
+Sichern. *In Pfade umwandeln* macht daraus normale Formen; beim Kombinieren geschieht das automatisch.
 
 ### Formen bearbeiten
 
@@ -138,7 +148,7 @@ im Schließknopf; vor dem Schließen fragt MacBurn nach.
 | ⌫ | Löschen |
 | ⌘G / ⇧⌘G | Gruppieren / Gruppierung aufheben |
 | ← → ↑ ↓ | Auswahl um 1 mm verschieben (⇧: 10 mm); in *Lasern* verbunden: Kopf bewegen |
-| V L R E D P S N | Werkzeuge: Auswahl, Linie, Rechteck, Ellipse, Dreieck, Polygon, Stern, Polylinie |
+| V L R E D P S N T | Werkzeuge: Auswahl, Linie, Rechteck, Ellipse, Dreieck, Polygon, Stern, Polylinie, Text |
 | ↩ | Polylinie beenden |
 | ⌘1 / ⌘2 / ⌘3 | Gestalten / Vorbereiten / Lasern |
 | ⌘K / ⇧⌘K | Laser verbinden / trennen |

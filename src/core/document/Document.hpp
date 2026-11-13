@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <set>
 #include <memory>
 #include <optional>
@@ -36,9 +37,23 @@ struct Shape {
 
 using ObjectSet = std::set<uint32_t>;
 
+// Bearbeitbarer Text. Die Buchstaben sind normale Formen eines Teils (part);
+// m bildet das Text-Koordinatensystem (Grundlinie der ersten Zeile bei 0/0) auf die Fläche ab.
+struct TextSpec {
+    std::string text = "Text";
+    std::string family = "Helvetica Neue", style = "Bold";
+    double capHeightMm = 10;     // Höhe der Großbuchstaben
+    int align = 0;               // 0 links, 1 mittig, 2 rechts
+    double letterSpacingMm = 0;
+    double lineSpacing = 1.2;    // Vielfaches der Schrifthöhe
+    Affine m;
+    bool operator==(const TextSpec&) const = default;
+};
+
 struct Document {
     std::vector<Layer> layers;
     std::vector<Shape> shapes;
+    std::map<uint32_t, TextSpec> texts;   // je Teil (part), der ein Text ist
 
     Rect bounds() const;
     Rect bounds(const ObjectSet& objects) const;
@@ -47,8 +62,10 @@ struct Document {
     ObjectSet allObjects() const;
     // Oberstes Objekt an einem Punkt (mm); tolerance für Linien und Konturen
     std::optional<uint32_t> hitTest(Vec2 p, double tolerance) const;
-    // Alle Punkte der Objekte durch fn schicken
-    void transform(const ObjectSet& objects, const std::function<Vec2(Vec2)>& fn);
+    // Objekte affin abbilden; Texte merken sich die Abbildung und bleiben bearbeitbar
+    void transform(const ObjectSet& objects, const Affine& m);
+    // Texte ohne Formen (z. B. nach Kombinieren oder Löschen) entfernen
+    void pruneTexts();
     static Document sample();   // Beispielprojekt für den ersten Start
 };
 

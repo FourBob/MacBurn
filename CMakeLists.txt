@@ -33,6 +33,7 @@ add_library(macburn_core STATIC
   src/core/profiles/Profiles.cpp
   src/core/geometry/Geometry.cpp
   src/core/geometry/Boolean.cpp
+  src/core/text/FontCoreText.cpp
   src/core/document/Document.cpp
   src/core/job/Job.cpp
   src/core/device/Grbl.cpp
@@ -42,12 +43,15 @@ add_library(macburn_core STATIC
   src/core/app/AppDevice.cpp
   src/core/app/AppEdit.cpp
   src/core/app/AppDraw.cpp
+  src/core/app/AppText.cpp
   src/core/io/Xml.cpp
   src/core/io/SvgImport.cpp
   src/core/io/Project.cpp
 )
 target_include_directories(macburn_core PUBLIC src/core)
 target_link_libraries(macburn_core PRIVATE clipper2)
+# Apple-C-APIs (keine Objective-C-Abhängigkeit): CoreText für Schriften
+target_link_libraries(macburn_core PUBLIC "-framework CoreText" "-framework CoreGraphics" "-framework CoreFoundation")
 target_compile_options(macburn_core PRIVATE -Wall -Wextra -Wpedantic -Wno-missing-field-initializers)
 
 # ---------------------------------------------------------------------------

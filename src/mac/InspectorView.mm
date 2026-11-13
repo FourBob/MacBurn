@@ -136,6 +136,25 @@ static NSTextField* label(NSString* s, NSFont* font, NSColor* color) {
                 view = [self row:NS(f.label) control:g unit:nil];
                 break;
             }
+            case mb::Field::Kind::TextArea: {
+                // Mehrzeilig: ↩ übernimmt, ⌥↩ fügt eine neue Zeile ein
+                NSTextField* t = [NSTextField textFieldWithString:NS(f.text)];
+                t.usesSingleLineMode = NO;
+                t.cell.wraps = YES;
+                t.cell.scrollable = NO;
+                t.lineBreakMode = NSLineBreakByWordWrapping;
+                t.font = [NSFont systemFontOfSize:13];
+                t.placeholderString = @"Text eingeben – ⌥↩ für neue Zeile";
+                t.identifier = key;
+                t.target = self; t.action = @selector(textArea:);
+                [t.heightAnchor constraintGreaterThanOrEqualToConstant:52].active = YES;
+                if (f.focus) dispatch_async(dispatch_get_main_queue(), ^{
+                    [t.window makeFirstResponder:t];
+                    [t.currentEditor selectAll:nil];
+                });
+                view = t;
+                break;
+            }
             case mb::Field::Kind::ButtonRow: {
                 NSStackView* row = [NSStackView stackViewWithViews:@[]];
                 row.spacing = 4;
@@ -207,6 +226,10 @@ static NSTextField* label(NSString* s, NSFont* font, NSColor* color) {
     return row;
 }
 
+- (void)textArea:(NSTextField*)t {
+    _core->setString(STD(t.identifier), STD(t.stringValue));
+    _shown.clear();
+}
 - (void)choice:(NSPopUpButton*)p { _core->setChoice(STD(p.identifier), int(p.indexOfSelectedItem)); }
 - (void)number:(NSControl*)c { _core->setNumber(STD(c.identifier), c.doubleValue); }
 - (void)numberText:(NSTextField*)t {

@@ -77,10 +77,23 @@ std::optional<uint32_t> Document::hitTest(Vec2 p, double tol) const {
     return std::nullopt;
 }
 
-void Document::transform(const ObjectSet& objects, const std::function<Vec2(Vec2)>& fn) {
+void Document::transform(const ObjectSet& objects, const Affine& m) {
+    std::set<uint32_t> parts;
     for (auto& s : shapes)
-        if (objects.count(s.object))
-            for (auto& p : s.path.points) p = fn(p);
+        if (objects.count(s.object)) {
+            for (auto& p : s.path.points) p = m.apply(p);
+            parts.insert(s.part);
+        }
+    for (uint32_t p : parts) {
+        auto it = texts.find(p);
+        if (it != texts.end()) it->second.m = m * it->second.m;
+    }
+}
+
+void Document::pruneTexts() {
+    std::set<uint32_t> used;
+    for (const auto& s : shapes) used.insert(s.part);
+    for (auto it = texts.begin(); it != texts.end();) it = used.count(it->first) ? std::next(it) : texts.erase(it);
 }
 
 Document Document::sample() {
