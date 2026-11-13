@@ -59,6 +59,13 @@ struct PreflightCheck {
     bool ok = true;           // nur bei automatischen Prüfungen
 };
 
+// Feste Farben mit Bedeutung (Farbleiste, ⌥1–⌥3)
+struct PaletteItem {
+    std::string key, name, intent;   // "#e5332e", "Rot", "Schneiden"
+    Color color;
+    bool active = false;             // Farbe der Auswahl bzw. der Zeichenebene
+};
+
 // Zeichenwerkzeuge
 enum class Tool { Select, Line, Rect, Ellipse, Triangle, Polygon, Star, Polyline, Text };
 
@@ -121,6 +128,13 @@ public:
     bool finishCreation();                           // ↩: Polylinie abschließen
     bool cancelCreation();                           // Esc
     bool isCreating() const { return create_.has_value(); }
+
+    // --- Farben / Ebenen ---
+    std::vector<PaletteItem> paletteItems() const;
+    // Auswahl in die Ebene dieser Farbe legen (Ebene wird bei Bedarf angelegt);
+    // ohne Auswahl: Farbe zum Zeichnen wählen
+    void applyPaletteColor(int index);
+    void moveSelectionToLayer(size_t layer);
 
     // --- Formen bearbeiten ---
     // Maus: Punkte in mm; tolerance in mm (aus der aktuellen Zoomstufe)
@@ -285,6 +299,8 @@ private:
     std::optional<Vec2> offsetFor() const; // Verschiebung je nach Jobursprung; nullopt = passt nicht
     void addDeviceFields(std::vector<Field>& f) const;
     void addSelectionFields(std::vector<Field>& f) const;
+    std::optional<size_t> paletteLayer(int index) const;   // passende vorhandene Ebene
+    std::optional<size_t> selectionLayer() const;          // gemeinsame Ebene der Auswahl
     void editDoc(const std::string& label, const std::function<void(Document&)>& fn);
     void setSelectionNumber(const std::string& key, double v);
 

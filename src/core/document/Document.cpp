@@ -90,6 +90,18 @@ void Document::transform(const ObjectSet& objects, const Affine& m) {
     }
 }
 
+std::vector<int> Document::removeEmptyLayers() {
+    std::vector<bool> used(layers.size(), false);
+    for (const auto& s : shapes) if (s.layer < used.size()) used[s.layer] = true;
+    std::vector<int> map(layers.size(), -1);
+    std::vector<Layer> kept;
+    for (size_t i = 0; i < layers.size(); ++i)
+        if (used[i]) { map[i] = int(kept.size()); kept.push_back(layers[i]); }
+    for (auto& s : shapes) s.layer = size_t(map[s.layer]);
+    layers = std::move(kept);
+    return map;
+}
+
 void Document::pruneTexts() {
     std::set<uint32_t> used;
     for (const auto& s : shapes) used.insert(s.part);

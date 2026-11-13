@@ -66,6 +66,8 @@ struct Document {
     void transform(const ObjectSet& objects, const Affine& m);
     // Texte ohne Formen (z. B. nach Kombinieren oder Löschen) entfernen
     void pruneTexts();
+    // Ebenen ohne Formen entfernen, Verweise der Formen anpassen; liefert alte→neue Nummern
+    std::vector<int> removeEmptyLayers();
     static Document sample();   // Beispielprojekt für den ersten Start
 };
 

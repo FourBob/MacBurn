@@ -115,6 +115,17 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
     NSMenuItem* combineItem = [[NSMenuItem alloc] initWithTitle:@"Kombinieren" action:nil keyEquivalent:@""];
     combineItem.submenu = combine;
     [object addItem:combineItem];
+    NSMenu* colors = [[NSMenu alloc] initWithTitle:@"Farbe"];
+    NSInteger ci = 0;
+    for (const auto& p : _core->paletteItems()) {
+        NSMenuItem* mi = item([NSString stringWithFormat:@"%@ – %@", NS(p.name), NS(p.intent)], @selector(paletteCore:),
+                              [NSString stringWithFormat:@"%ld", (long)(ci + 1)], NSEventModifierFlagOption);
+        mi.tag = ci++;
+        [colors addItem:mi];
+    }
+    NSMenuItem* colorItem = [[NSMenuItem alloc] initWithTitle:@"Farbe" action:nil keyEquivalent:@""];
+    colorItem.submenu = colors;
+    [object addItem:colorItem];
     [object addItem:NSMenuItem.separatorItem];
     [object addItem:item(@"Gruppieren", @selector(groupCore:), @"g")];
     [object addItem:item(@"Gruppierung aufheben", @selector(ungroupCore:), @"g", NSEventModifierFlagCommand | NSEventModifierFlagShift)];
@@ -174,6 +185,11 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
     if (mi.action == @selector(selectAll:)) return _core->canEdit();
     if (mi.action == @selector(alignCore:)) return _core->hasSelection() && _core->canEdit();
     if (mi.action == @selector(distributeCore:)) return _core->canDistribute() && _core->canEdit();
+    if (mi.action == @selector(paletteCore:)) {
+        auto pal = _core->paletteItems();
+        mi.state = size_t(mi.tag) < pal.size() && pal[size_t(mi.tag)].active ? NSControlStateValueOn : NSControlStateValueOff;
+        return _core->canEdit();
+    }
     if (mi.action == @selector(combineCore:)) return _core->canCombine() && _core->canEdit();
     if (mi.action == @selector(groupCore:)) return _core->canGroup() && _core->canEdit();
     if (mi.action == @selector(ungroupCore:)) return _core->canUngroup() && _core->canEdit();
@@ -205,6 +221,7 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
 - (void)rotateCore:(id)sender { _core->rotateSelection(-90); }
 - (void)rotateLeftCore:(id)sender { _core->rotateSelection(90); }
 - (void)groupCore:(id)sender { _core->groupSelection(); }
+- (void)paletteCore:(NSMenuItem*)sender { _core->applyPaletteColor(int(sender.tag)); }
 - (void)combineCore:(NSMenuItem*)sender { _core->combineSelection(int(sender.tag)); }
 - (void)alignCore:(NSMenuItem*)sender { _core->alignSelection(int(sender.tag)); }
 - (void)distributeCore:(NSMenuItem*)sender { _core->distributeSelection(sender.tag == 0); }

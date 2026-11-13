@@ -517,6 +517,13 @@ void AppController::addSelectionFields(std::vector<Field>& f) const {
         x.enabled = canEdit();
         f.push_back(x);
     };
+    Field lay{Field::Kind::Choice, "selLayer", "Ebene"};
+    auto common = selectionLayer();
+    if (!common) lay.options.push_back("Gemischt");
+    for (const auto& l : doc_.layers) lay.options.push_back(l.name + " – " + intentLabel(l.intent));
+    lay.selected = common ? int(*common) : 0;
+    lay.enabled = canEdit();
+    f.push_back(lay);
     Vec2 ref = anchorPoint(b, refPoint_);
     Field rp{Field::Kind::Anchor, "refPoint", "Bezugspunkt"};
     rp.selected = refPoint_;

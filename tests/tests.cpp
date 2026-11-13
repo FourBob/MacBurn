@@ -1057,6 +1057,45 @@ TEST(text_saved_duplicated_converted) {
     std::filesystem::remove(file);
 }
 
+// ---------- Farbzuweisung ----------
+
+static std::string layerOfSelection(AppController& c) {
+    for (auto& f : c.inspector()) if (f.key == "selLayer") return f.options[size_t(f.selected)];
+    return "";
+}
+
+TEST(palette_assigns_and_cleans_up) {
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    CHECK(c.paletteItems().size() == 3);
+    c.pointerDown({150, 80}, 1.0, false);          // Anhänger: Schnitt + Ritzlinie
+    CHECK(layerOfSelection(c) == "Gemischt");
+    c.applyPaletteColor(1);                         // Blau → vorhandene Ebene „Gravur“ (gleiche Farbe)
+    CHECK(layerOfSelection(c).rfind("Gravur", 0) == 0);
+    CHECK(c.layerRows().size() == 2);               // „Ritzen“ ist leer geworden und weg
+    CHECK(c.paletteItems()[1].active);
+    c.undo();
+    CHECK(c.layerRows().size() == 3);
+}
+
+TEST(palette_matches_imported_names_and_creates_layers) {
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    c.importFile(std::string(MB_SOURCE_DIR) + "/examples/schild.svg");   // Ebenen Rot, Blau, Grün (#ff0000 …)
+    c.applyPaletteColor(0);                         // ganzes Schild nach Rot
+    CHECK(c.layerRows().size() == 1);               // keine zweite rote Ebene, leere entfernt
+    CHECK(c.layerRows()[0].name == "Rot");
+    c.applyPaletteColor(2);                         // Grün gibt es nicht mehr → wird angelegt
+    CHECK(c.layerRows().size() == 1);
+    CHECK(c.layerRows()[0].name == "Grün" && c.layerRows()[0].intent == "Markieren");
+    // Ohne Auswahl: Zeichenfarbe wählen
+    c.newDocument();
+    c.applyPaletteColor(1);
+    dragDraw(c, Tool::Rect, {10, 10}, {30, 30});
+    CHECK(c.layerRows().size() == 1 && c.layerRows()[0].intent == "Gravieren");
+    // Ebene über das Inspektor-Feld
+    c.applyPaletteColor(0);                         // Auswahl (Rechteck) nach Rot
+    CHECK(c.layerRows()[0].name == "Rot");
+}
+
 int main() {
     for (auto& [name, fn] : tests) {
         int before = failures;

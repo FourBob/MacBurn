@@ -23,6 +23,7 @@ static NSToolbarItemIdentifier const kPrimary = @"primary";
     InspectorView* _inspector;
     NSTextField* _status;
     NSStackView* _tools;
+    NSStackView* _palette;
     BOOL _refreshQueued;
 }
 
@@ -201,6 +202,39 @@ static NSTextField* small(NSString* s, BOOL secondary) {
         [toolBg.centerYAnchor constraintEqualToAnchor:_canvas.centerYAnchor],
     ]];
 
+    // Farbleiste unten auf der Zeichenfläche
+    _palette = [NSStackView stackViewWithViews:@[]];
+    _palette.spacing = 6;
+    _palette.edgeInsets = NSEdgeInsetsMake(5, 8, 5, 8);
+    int pi = 0;
+    for (const auto& p : _core->paletteItems()) {
+        NSButton* b = [NSButton buttonWithTitle:@"" target:self action:@selector(palettePicked:)];
+        b.bordered = NO;
+        b.wantsLayer = YES;
+        b.layer.backgroundColor = NSCol(p.color).CGColor;
+        b.layer.cornerRadius = 11;
+        b.tag = pi;
+        b.toolTip = [NSString stringWithFormat:@"%@ – %@ (⌥%d)", NS(p.name), NS(p.intent), pi + 1];
+        b.refusesFirstResponder = YES;
+        b.accessibilityLabel = NS(p.name);
+        [b.widthAnchor constraintEqualToConstant:22].active = YES;
+        [b.heightAnchor constraintEqualToConstant:22].active = YES;
+        [_palette addArrangedSubview:b];
+        ++pi;
+    }
+    NSVisualEffectView* palBg = [[NSVisualEffectView alloc] init];
+    palBg.material = NSVisualEffectMaterialMenu;
+    palBg.state = NSVisualEffectStateActive;
+    palBg.wantsLayer = YES;
+    palBg.layer.cornerRadius = 9;
+    [self pin:_palette into:palBg top:0];
+    palBg.translatesAutoresizingMaskIntoConstraints = NO;
+    [_canvas addSubview:palBg];
+    [NSLayoutConstraint activateConstraints:@[
+        [palBg.centerXAnchor constraintEqualToAnchor:_canvas.centerXAnchor],
+        [palBg.bottomAnchor constraintEqualToAnchor:_canvas.bottomAnchor constant:-10],
+    ]];
+
     NSSplitView* split = [[NSSplitView alloc] init];
     split.vertical = YES;
     split.dividerStyle = NSSplitViewDividerStyleThin;
@@ -286,6 +320,7 @@ static NSTextField* small(NSString* s, BOOL secondary) {
 // ---------- Aktionen → Kern ----------
 
 - (void)toolPicked:(NSButton*)b { _core->setTool(mb::Tool(b.tag)); }
+- (void)palettePicked:(NSButton*)b { _core->applyPaletteColor(int(b.tag)); }
 
 - (void)phaseChanged:(NSSegmentedControl*)s { _core->setPhase(mb::Phase(s.selectedSegment)); }
 - (void)machineChanged:(NSPopUpButton*)p { _core->selectMachine(int(p.indexOfSelectedItem)); }
@@ -546,6 +581,14 @@ static NSTextField* small(NSString* s, BOOL secondary) {
     [_inspector showFields:_core->inspector()];
     // Werkzeuge nur beim Gestalten und Vorbereiten
     _tools.superview.hidden = _core->phase() == mb::Phase::Laser;
+    _palette.superview.hidden = _core->phase() == mb::Phase::Laser;
+    auto pal = _core->paletteItems();
+    for (NSButton* b in _palette.arrangedSubviews) {
+        size_t i = size_t(b.tag);
+        bool active = i < pal.size() && pal[i].active;
+        b.layer.borderWidth = active ? 2.5 : 0;   // aktive Farbe mit Rahmen
+        b.layer.borderColor = NSColor.labelColor.CGColor;
+    }
     for (NSButton* b in _tools.arrangedSubviews) b.state = b.tag == NSInteger(_core->tool()) ? NSControlStateValueOn : NSControlStateValueOff;
     _canvas.crosshair = _core->tool() != mb::Tool::Select && _core->phase() != mb::Phase::Laser;
     _status.stringValue = NS(_core->statusText());

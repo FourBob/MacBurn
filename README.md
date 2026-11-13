@@ -88,6 +88,21 @@ und sind danach ausgewählt.
 **Zahlenfelder rechnen mit:** Komma oder Punkt, `100/3`, `25+12,5`, `(10+2)*3`, Einheiten `mm`, `cm`, `in`, `pt`.
 Angezeigt werden bis zu drei Nachkommastellen.
 
+### Farben (Ebenen) zuweisen
+
+Die Farbleiste unten auf der Zeichenfläche, das Menü *Objekt › Farbe* oder ⌥1–⌥3:
+
+| Farbe | Taste | Absicht neuer Ebenen |
+|---|---|---|
+| Rot | ⌥1 | Schneiden |
+| Blau | ⌥2 | Gravieren |
+| Grün | ⌥3 | Markieren |
+
+Mit Auswahl: Die Formen kommen in die Ebene dieser Farbe – vorhandene Ebenen werden erkannt (z. B. „Rot“ aus
+einem SVG oder „Schnitt“ aus dem Beispiel), fehlende angelegt, leer gewordene entfernt. Ohne Auswahl wählt der
+Klick die Farbe für die nächsten gezeichneten Formen. Im Inspektor legt das Feld *Ebene* die Auswahl in jede
+vorhandene Ebene.
+
 ### Text
 
 Alle auf dem Mac installierten Schriften. Im Inspektor: Text (⌥↩ für eine neue Zeile), Schrift, Schnitt,
@@ -147,6 +162,7 @@ im Schließknopf; vor dem Schließen fragt MacBurn nach.
 | ⌘D | Duplizieren |
 | ⌫ | Löschen |
 | ⌘G / ⇧⌘G | Gruppieren / Gruppierung aufheben |
+| ⌥1 / ⌥2 / ⌥3 | Farbe Rot (Schneiden) / Blau (Gravieren) / Grün (Markieren) |
 | ← → ↑ ↓ | Auswahl um 1 mm verschieben (⇧: 10 mm); in *Lasern* verbunden: Kopf bewegen |
 | V L R E D P S N T | Werkzeuge: Auswahl, Linie, Rechteck, Ellipse, Dreieck, Polygon, Stern, Polylinie, Text |
 | ↩ | Polylinie beenden |

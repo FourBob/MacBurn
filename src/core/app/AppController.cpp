@@ -146,6 +146,9 @@ void AppController::setChoice(const std::string& key, int index) {
         jogStep_ = index; changed();
     } else if (key == "origin") {
         origin_ = index; settingsDirty_ = true; changed();
+    } else if (key == "selLayer") {
+        int offset = selectionLayer() ? 0 : 1;   // „Gemischt“ steht vorne
+        if (index - offset >= 0) moveSelectionToLayer(size_t(index - offset));
     } else if (key == "textFamily") {
         const auto& fams = families();
         if (index < 0 || index >= int(fams.size())) return;
@@ -230,6 +233,7 @@ void AppController::pressButton(const std::string& key) {
     if (key == "rot90" || key == "rotR") { rotateSelection(-90); return; }
     if (key == "rotL") { rotateSelection(90); return; }
     if (key == "group") { groupSelection(); return; }
+    if (key.rfind("palette:", 0) == 0) { applyPaletteColor(std::atoi(key.c_str() + 8)); return; }
     if (key.rfind("combine:", 0) == 0) { combineSelection(std::atoi(key.c_str() + 8)); return; }
     if (key.rfind("align:", 0) == 0) { alignSelection(std::atoi(key.c_str() + 6)); return; }
     if (key == "distribute:0") { distributeSelection(true); return; }
