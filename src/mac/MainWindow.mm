@@ -53,6 +53,8 @@ static NSToolbarItemIdentifier const kPrimary = @"primary";
     _core->setOnChange([weakSelf] { [weakSelf queueRefresh]; });
     _core->setOnStatus([weakSelf] { [weakSelf refreshStatus]; });
     [self refresh];
+    self.initialFirstResponder = _canvas;
+    [self makeFirstResponder:_canvas];
     return self;
 }
 
@@ -95,6 +97,7 @@ static NSTextField* small(NSString* s, BOOL secondary) {
     _layers.rowHeight = 40;
     _layers.style = NSTableViewStyleSourceList;
     _layers.dataSource = self;
+    _layers.refusesFirstResponder = YES;   // ⌘A, Pfeiltasten und ⌫ gehören der Zeichenfläche
     _layers.delegate = self;
     NSScrollView* layerScroll = [[NSScrollView alloc] init];
     layerScroll.documentView = _layers;

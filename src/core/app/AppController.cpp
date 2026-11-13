@@ -169,6 +169,7 @@ void AppController::pressButton(const std::string& key) {
     if (key == "rot90" || key == "rotR") { rotateSelection(-90); return; }
     if (key == "rotL") { rotateSelection(90); return; }
     if (key == "group") { groupSelection(); return; }
+    if (key.rfind("combine:", 0) == 0) { combineSelection(std::atoi(key.c_str() + 8)); return; }
     if (key.rfind("align:", 0) == 0) { alignSelection(std::atoi(key.c_str() + 6)); return; }
     if (key == "distribute:0") { distributeSelection(true); return; }
     if (key == "distribute:1") { distributeSelection(false); return; }

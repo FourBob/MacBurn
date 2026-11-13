@@ -3,6 +3,7 @@
 #include "app/AppController.hpp"
 #include "device/Grbl.hpp"
 #include "device/GrblDevice.hpp"
+#include "geometry/Boolean.hpp"
 #include "io/Project.hpp"
 #include "io/SvgImport.hpp"
 #include "job/Job.hpp"
@@ -743,6 +744,71 @@ TEST(align_and_distribute) {
     d.clearSelection();
     d.pointerDown({120, 6}, 0.5, false);    // Rand des mittleren Quadrats
     NEAR(selRect(d).x, 105);
+}
+
+// ---------- Boolesche Operationen und Versatz ----------
+
+static geo::Region square(double x, double y, double size) { return {Polyline::rectangle(x, y, size, size)}; }
+#define NEARTOL(a, b, t) CHECK(std::abs(double(a) - double(b)) < (t))
+
+TEST(boolean_basics) {
+    auto a = square(0, 0, 10), b = square(5, 5, 10);
+    NEARTOL(geo::area(geo::unite({a, b})), 175, 1e-6);
+    NEARTOL(geo::area(geo::subtract(a, {b})), 75, 1e-6);
+    NEARTOL(geo::area(geo::intersect({a, b})), 25, 1e-6);
+    auto parts = geo::divide({a, b});
+    CHECK(parts.size() == 3);
+    double sum = 0;
+    for (auto& p : parts) sum += geo::area(p);
+    NEARTOL(sum, 175, 1e-6);
+    // Fläche mit Loch (gerade-ungerade) bleibt beim Vereinen ein Loch
+    geo::Region ring = {Polyline::rectangle(0, 0, 30, 30), Polyline::rectangle(10, 10, 10, 10)};
+    NEARTOL(geo::area(geo::unite({ring, square(40, 0, 10)})), 900 - 100 + 100, 1e-6);
+    CHECK(geo::intersect({a, square(50, 50, 5)}).empty());
+}
+
+TEST(offset_closed_and_open) {
+    auto out = geo::offset({Polyline::rectangle(0, 0, 10, 10)}, 1);
+    NEARTOL(geo::area(out), 100 + 4 * 10 + M_PI, 0.1);    // Rundungen an den Ecken (angenähert)
+    auto in = geo::offset({Polyline::rectangle(0, 0, 10, 10)}, -1);
+    NEARTOL(geo::area(in), 64, 0.01);
+    CHECK(geo::offset({Polyline::rectangle(0, 0, 10, 10)}, -6).empty());
+    auto line = geo::offset({{{{0, 0}, {20, 0}}, false}}, 1);      // Linie → Kontur 2 mm breit
+    NEARTOL(geo::area(line), 40 + M_PI, 0.1);
+}
+
+TEST(controller_combine_and_offset) {
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    c.newDocument();
+    std::string svg = std::string(MB_SOURCE_DIR) + "/examples/test-30mm.svg";
+    c.importFile(svg);
+    c.importFile(svg); c.nudge(15, 0);
+    c.selectAll();
+    CHECK(c.canCombine());
+    c.combineSelection(0);                      // vereinen
+    CHECK(c.undoTitle().find("Vereinen") != std::string::npos);
+    Rect r = selRect(c);
+    NEARTOL(r.w, 45, 0.01);                     // 30 + 15
+    // Farben bleiben erhalten: weiterhin Gravur-, Markier- und Schnittebene mit Inhalt
+    for (auto& row : c.layerRows()) CHECK(row.values != "—");
+    c.setPhase(Phase::Prepare);
+    std::string g = c.exportGcode();
+    CHECK(g.find("S1000") != std::string::npos);   // Schneiden (100 %) ist noch da
+    c.setPhase(Phase::Design);
+    c.undo();
+    c.selectAll();
+    c.combineSelection(3);                      // teilen
+    CHECK(c.hasSelection());
+    c.undo();
+    c.selectAll();
+    c.combineSelection(2);                      // Schnittmenge: 15 mm breit
+    NEARTOL(selRect(c).w, 15, 0.01);
+    c.offsetSelection(2);                       // Kontur 2 mm außen, neues Objekt
+    NEARTOL(selRect(c).w, 19, 0.01);
+    CHECK(c.undoTitle().find("Versatz") != std::string::npos);
+    c.offsetSelection(-50);                     // nichts übrig → kein Schritt, Hinweis
+    CHECK(c.undoTitle().find("Versatz außen") != std::string::npos);
+    CHECK(c.lastMessage().find("nichts") != std::string::npos);
 }
 
 int main() {

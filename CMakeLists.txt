@@ -14,12 +14,24 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # ---------------------------------------------------------------------------
+# Fremdbibliotheken (unverändert, siehe third_party/*/HERKUNFT.md)
+# ---------------------------------------------------------------------------
+add_library(clipper2 STATIC
+  third_party/clipper2/src/clipper.engine.cpp
+  third_party/clipper2/src/clipper.offset.cpp
+  third_party/clipper2/src/clipper.rectclip.cpp
+)
+target_include_directories(clipper2 SYSTEM PUBLIC third_party/clipper2/include)
+target_compile_options(clipper2 PRIVATE -w)
+
+# ---------------------------------------------------------------------------
 # Kern: portables C++, keine Objective-C-Abhängigkeit
 # ---------------------------------------------------------------------------
 add_library(macburn_core STATIC
   src/core/util/Json.cpp
   src/core/profiles/Profiles.cpp
   src/core/geometry/Geometry.cpp
+  src/core/geometry/Boolean.cpp
   src/core/document/Document.cpp
   src/core/job/Job.cpp
   src/core/device/Grbl.cpp
@@ -33,6 +45,7 @@ add_library(macburn_core STATIC
   src/core/io/Project.cpp
 )
 target_include_directories(macburn_core PUBLIC src/core)
+target_link_libraries(macburn_core PRIVATE clipper2)
 target_compile_options(macburn_core PRIVATE -Wall -Wextra -Wpedantic -Wno-missing-field-initializers)
 
 # ---------------------------------------------------------------------------

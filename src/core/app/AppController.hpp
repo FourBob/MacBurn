@@ -115,6 +115,11 @@ public:
     void alignSelection(int mode);
     void distributeSelection(bool horizontal);   // ab drei Objekten: gleiche Abstände
     bool canDistribute() const { return selection_.size() >= 3; }
+    // 0 vereinen, 1 subtrahieren (vorne von hinten), 2 Schnittmenge, 3 teilen
+    void combineSelection(int op);
+    bool canCombine() const;
+    // Versatz um distance mm (> 0 außen, < 0 innen) als neues Objekt; Original bleibt
+    void offsetSelection(double distance);
     void groupSelection();
     void ungroupSelection();
     bool canGroup() const { return selection_.size() > 1; }

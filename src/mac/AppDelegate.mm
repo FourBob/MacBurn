@@ -105,6 +105,17 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
     alignItem.submenu = align;
     [object addItem:alignItem];
     [object addItem:NSMenuItem.separatorItem];
+    NSArray* combineTitles = @[@"Vereinen", @"Vorderes vom hinteren abziehen", @"Schnittmenge", @"Teilen"];
+    NSMenu* combine = [[NSMenu alloc] initWithTitle:@"Kombinieren"];
+    for (NSInteger i = 0; i < 4; ++i) {
+        NSMenuItem* ci = item(combineTitles[i], @selector(combineCore:), @"");
+        ci.tag = i;
+        [combine addItem:ci];
+    }
+    NSMenuItem* combineItem = [[NSMenuItem alloc] initWithTitle:@"Kombinieren" action:nil keyEquivalent:@""];
+    combineItem.submenu = combine;
+    [object addItem:combineItem];
+    [object addItem:NSMenuItem.separatorItem];
     [object addItem:item(@"Gruppieren", @selector(groupCore:), @"g")];
     [object addItem:item(@"Gruppierung aufheben", @selector(ungroupCore:), @"g", NSEventModifierFlagCommand | NSEventModifierFlagShift)];
 
@@ -163,6 +174,7 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
     if (mi.action == @selector(selectAll:)) return _core->canEdit();
     if (mi.action == @selector(alignCore:)) return _core->hasSelection() && _core->canEdit();
     if (mi.action == @selector(distributeCore:)) return _core->canDistribute() && _core->canEdit();
+    if (mi.action == @selector(combineCore:)) return _core->canCombine() && _core->canEdit();
     if (mi.action == @selector(groupCore:)) return _core->canGroup() && _core->canEdit();
     if (mi.action == @selector(ungroupCore:)) return _core->canUngroup() && _core->canEdit();
     if (mi.action == @selector(laserConnect:)) return !_core->deviceConnected();
@@ -193,6 +205,7 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
 - (void)rotateCore:(id)sender { _core->rotateSelection(-90); }
 - (void)rotateLeftCore:(id)sender { _core->rotateSelection(90); }
 - (void)groupCore:(id)sender { _core->groupSelection(); }
+- (void)combineCore:(NSMenuItem*)sender { _core->combineSelection(int(sender.tag)); }
 - (void)alignCore:(NSMenuItem*)sender { _core->alignSelection(int(sender.tag)); }
 - (void)distributeCore:(NSMenuItem*)sender { _core->distributeSelection(sender.tag == 0); }
 - (void)ungroupCore:(id)sender { _core->ungroupSelection(); }

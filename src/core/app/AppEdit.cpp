@@ -1,10 +1,12 @@
 // MacBurn – Formen bearbeiten: Auswahl, Verschieben, Maße, Drehen, Spiegeln, Duplizieren, Löschen.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "app/AppController.hpp"
+#include "geometry/Boolean.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <map>
+#include <optional>
 #include <set>
 
 namespace mb {
@@ -279,6 +281,158 @@ void AppController::distributeSelection(bool horizontal) {
     });
 }
 
+// ---------- Kombinieren und Versatz ----------
+
+namespace {
+
+// Ausgewählte Objekte in Zeichenreihenfolge (hinten zuerst)
+std::vector<uint32_t> orderedObjects(const Document& d, const ObjectSet& sel) {
+    std::vector<uint32_t> out;
+    for (const auto& s : d.shapes)
+        if (sel.count(s.object) && std::find(out.begin(), out.end(), s.object) == out.end()) out.push_back(s.object);
+    return out;
+}
+
+// Geschlossene Formen eines Objekts, auf Wunsch nur einer Ebene
+geo::Region regionOf(const Document& d, uint32_t obj, std::optional<size_t> layer = std::nullopt) {
+    geo::Region r;
+    for (const auto& s : d.shapes)
+        if (s.object == obj && s.path.closed && s.path.points.size() >= 3 && (!layer || s.layer == *layer)) r.push_back(s.path);
+    return r;
+}
+
+// Umriss eines Objekts: alle Ebenen zusammen (jede Ebene für sich gerade-ungerade gefüllt)
+geo::Region footprint(const Document& d, uint32_t obj) {
+    std::set<size_t> layers;
+    for (const auto& s : d.shapes) if (s.object == obj && s.path.closed) layers.insert(s.layer);
+    std::vector<geo::Region> parts;
+    for (size_t l : layers) parts.push_back(regionOf(d, obj, l));
+    return geo::unite(parts);
+}
+
+std::set<size_t> closedLayers(const Document& d, uint32_t obj) {
+    std::set<size_t> out;
+    for (const auto& s : d.shapes) if (s.object == obj && s.path.closed) out.insert(s.layer);
+    return out;
+}
+
+size_t layerOf(const Document& d, uint32_t obj, bool closedOnly) {
+    for (const auto& s : d.shapes) if (s.object == obj && (!closedOnly || s.path.closed)) return s.layer;
+    return 0;
+}
+
+} // namespace
+
+bool AppController::canCombine() const {
+    int n = 0;
+    for (uint32_t o : selection_) if (!regionOf(doc_, o).empty()) ++n;
+    return n >= 2;
+}
+
+void AppController::combineSelection(int opIndex) {
+    if (!canCombine()) return;
+    static const char* labels[] = {"Vereinen", "Subtrahieren", "Schnittmenge", "Teilen"};
+    int opi = std::clamp(opIndex, 0, 3);
+    std::vector<uint32_t> used;
+    for (uint32_t o : orderedObjects(doc_, selection_)) if (!regionOf(doc_, o).empty()) used.push_back(o);
+
+    // Ergebnis: Liste neuer Objekte, je Objekt Flächen pro Ebene
+    using Piece = std::vector<std::pair<size_t, geo::Region>>;
+    std::vector<Piece> results;
+    std::set<size_t> allLayers;
+    for (uint32_t o : used) for (size_t l : closedLayers(doc_, o)) allLayers.insert(l);
+
+    if (opi == 0 || opi == 3) {
+        // Vereinen / Teilen: je Ebene getrennt – Farben bleiben Farben
+        Piece united;
+        for (size_t l : allLayers) {
+            std::vector<geo::Region> regs;
+            for (uint32_t o : used) { auto r = regionOf(doc_, o, l); if (!r.empty()) regs.push_back(std::move(r)); }
+            if (opi == 0) united.push_back({l, geo::unite(regs)});
+            else for (auto& part : geo::divide(regs)) results.push_back({{l, std::move(part)}});
+        }
+        if (opi == 0) results.push_back(std::move(united));
+    } else {
+        // Abziehen / Schnittmenge: alle Ebenen des hintersten Objekts gegen die Umrisse der übrigen
+        uint32_t base = used.front();
+        std::vector<geo::Region> others;
+        for (size_t i = 1; i < used.size(); ++i) others.push_back(footprint(doc_, used[i]));
+        Piece piece;
+        for (size_t l : closedLayers(doc_, base)) {
+            auto r = regionOf(doc_, base, l);
+            if (opi == 1) piece.push_back({l, geo::subtract(r, others)});
+            else {
+                std::vector<geo::Region> all = {r};
+                all.insert(all.end(), others.begin(), others.end());
+                piece.push_back({l, geo::intersect(all)});
+            }
+        }
+        results.push_back(std::move(piece));
+    }
+    // Leere Ergebnisse entfernen
+    for (auto& piece : results)
+        piece.erase(std::remove_if(piece.begin(), piece.end(), [](auto& lr) { return lr.second.empty(); }), piece.end());
+    results.erase(std::remove_if(results.begin(), results.end(), [](const Piece& p) { return p.empty(); }), results.end());
+    if (results.empty()) {
+        message_ = opi == 2 ? "Die Formen überschneiden sich nicht – es bleibt nichts übrig."
+                            : "Es bleibt keine Fläche übrig.";
+        changed();
+        return;
+    }
+
+    ObjectSet usedSet(used.begin(), used.end()), fresh;
+    // Beim Abziehen und bei der Schnittmenge verschwinden die vorderen Objekte ganz.
+    ObjectSet removeAll = opi == 1 || opi == 2 ? ObjectSet(used.begin() + 1, used.end()) : ObjectSet{};
+    editDoc(labels[opi], [&](Document& d) {
+        d.shapes.erase(std::remove_if(d.shapes.begin(), d.shapes.end(), [&](const Shape& s) {
+                           return removeAll.count(s.object) || (usedSet.count(s.object) && s.path.closed);
+                       }),
+                       d.shapes.end());
+        uint32_t next = d.nextObjectId(), part = d.nextPartId();
+        for (auto& piece : results) {
+            uint32_t obj = next++;
+            for (auto& [layer, reg] : piece) {
+                for (auto& p : reg) d.shapes.push_back({labels[opi], layer, p, obj, part});
+                ++part;
+            }
+            fresh.insert(obj);
+        }
+    });
+    selection_ = fresh;
+    message_.clear();
+    changed();
+}
+
+void AppController::offsetSelection(double distance) {
+    if (selection_.empty() || std::abs(distance) < 1e-6) return;
+    auto order = orderedObjects(doc_, selection_);
+    ObjectSet fresh;
+    bool empty = true;
+    editDoc(distance > 0 ? "Versatz außen" : "Versatz innen", [&](Document& d) {
+        uint32_t next = d.nextObjectId(), part = d.nextPartId();
+        for (uint32_t o : order) {
+            std::vector<Polyline> paths;
+            for (const auto& s : d.shapes) if (s.object == o) paths.push_back(s.path);
+            auto reg = geo::offset(paths, distance);
+            if (reg.empty()) continue;
+            empty = false;
+            size_t layer = layerOf(d, o, false);
+            uint32_t obj = next++;
+            for (auto& p : reg) d.shapes.push_back({"Versatz", layer, p, obj, part});
+            ++part;
+            fresh.insert(obj);
+        }
+    });
+    if (empty) {
+        undo_.undo(doc_);   // nichts entstanden: Schritt zurücknehmen
+        message_ = "Nach innen versetzt bleibt von der Form nichts übrig.";
+        changed();
+        return;
+    }
+    selection_ = fresh;
+    changed();
+}
+
 bool AppController::canUngroup() const {
     // Aufheben geht, wenn ein ausgewähltes Objekt aus mehr als einer Form besteht.
     std::map<uint32_t, int> count;
@@ -332,6 +486,7 @@ void AppController::setSelectionNumber(const std::string& key, double v) {
     if (key == "selRotate") { rotateSelection(v); return; }
     if (key == "selSkewX") { skewSelection(v, 0); return; }
     if (key == "selSkewY") { skewSelection(0, v); return; }
+    if (key == "selOffset") { offsetSelection(v); return; }
     Rect b = doc_.bounds(selection_);
     if (key == "selX" || key == "selY") {
         Vec2 d = key == "selX" ? Vec2{v - b.x, 0} : Vec2{0, v - b.y};
@@ -392,6 +547,21 @@ void AppController::addSelectionFields(std::vector<Field>& f) const {
         Field di{Field::Kind::ButtonRow, "distribute", ""};
         di.options = {"distribute.horizontal.center|Horizontal verteilen", "distribute.vertical.center|Vertikal verteilen"};
         f.push_back(di);
+    }
+    if (canCombine()) {
+        f.push_back({Field::Kind::Header, "", "Kombinieren"});
+        f.push_back({Field::Kind::Button, "combine:0", "Vereinen"});
+        f.push_back({Field::Kind::Button, "combine:1", "Vorderes vom hinteren abziehen"});
+        f.push_back({Field::Kind::Button, "combine:2", "Schnittmenge"});
+        f.push_back({Field::Kind::Button, "combine:3", "Teilen"});
+    }
+    f.push_back({Field::Kind::Header, "", "Versatz"});
+    {
+        Field o{Field::Kind::Number, "selOffset", "Kontur um"};
+        o.value = 0; o.min = -50; o.max = 50; o.step = 0.5; o.unit = "mm";
+        o.enabled = canEdit();
+        f.push_back(o);
+        f.push_back({Field::Kind::Info, "", "Positiv = außen, negativ = innen. Legt eine neue Kontur an, das Original bleibt."});
     }
     f.push_back({Field::Kind::Header, "", "Anordnen"});
     f.push_back({Field::Kind::Button, "flipH", "Horizontal spiegeln"});
