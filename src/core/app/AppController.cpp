@@ -303,7 +303,7 @@ std::vector<Field> AppController::inspector() const {
 
 std::string AppController::estimateText() const {
     auto* m = machine();
-    double s = estimateSeconds(job_, m ? m->maxSpeedMmMin : 6000);
+    double s = m ? estimateSeconds(job_, m->maxSpeedMmMin, m->accelerationMmS2) : estimateSeconds(job_, 6000);
     int t = int(std::lround(s));
     char b[32];
     if (t >= 3600) std::snprintf(b, sizeof b, "%d:%02d:%02d", t / 3600, t / 60 % 60, t % 60);

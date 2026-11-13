@@ -31,6 +31,7 @@ struct MachineProfile {
     double opticalPowerW = 0;
     double wavelengthNm = 0;
     double maxSpeedMmMin = 6000;
+    double accelerationMmS2 = 1000; // GRBL $120/$121
     double sMax = 1000;        // GRBL $30
     int baudRate = 115200;
     bool airAssistControllable = false;

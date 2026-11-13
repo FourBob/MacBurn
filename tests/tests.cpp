@@ -42,6 +42,9 @@ TEST(loads_reference_machine_and_materials) {
     if (!m) return;
     NEAR(m->opticalPowerW, 10);
     NEAR(m->variants.at(0).area.x, 410);
+    NEAR(m->variants.at(0).area.y, 410);   // laut $131
+    NEAR(m->maxSpeedMmMin, 6000);           // laut $110
+    NEAR(m->accelerationMmS2, 500);         // laut $120
     NEAR(m->variants.at(1).area.x, 750);
     CHECK(!m->airAssistControllable);
     auto mats = store.materialsFor(*m);

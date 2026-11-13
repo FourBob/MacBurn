@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <fcntl.h>
 #include <poll.h>
+#include <sys/ioctl.h>
 #include <sstream>
 #include <termios.h>
 #include <unistd.h>
@@ -129,7 +130,7 @@ bool SerialPort::open(const std::string& path, int baud, std::string* error) {
     tcgetattr(fd_, &tio);
     cfmakeraw(&tio);
     tio.c_cflag |= (CLOCAL | CREAD);
-    tio.c_cflag &= ~CRTSCTS;
+    tio.c_cflag &= ~(CRTSCTS | HUPCL);
     cfsetspeed(&tio, speed_t(baud));
     if (tcsetattr(fd_, TCSANOW, &tio) != 0) {
         if (error) *error = std::strerror(errno);
@@ -157,6 +158,16 @@ bool SerialPort::write(const std::string& data) {
         done += size_t(n);
     }
     return true;
+}
+
+bool SerialPort::setLines(bool dtr, bool rts) {
+    if (fd_ < 0) return false;
+    int set = (dtr ? TIOCM_DTR : 0) | (rts ? TIOCM_RTS : 0);
+    int clr = (dtr ? 0 : TIOCM_DTR) | (rts ? 0 : TIOCM_RTS);
+    bool ok = true;
+    if (set) ok &= ::ioctl(fd_, TIOCMBIS, &set) == 0;
+    if (clr) ok &= ::ioctl(fd_, TIOCMBIC, &clr) == 0;
+    return ok;
 }
 
 bool SerialPort::writeByte(unsigned char b) { return write(std::string(1, char(b))); }

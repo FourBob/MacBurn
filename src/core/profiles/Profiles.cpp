@@ -96,6 +96,7 @@ MachineProfile machineFromJson(const json::Value& v) {
         m.focusHint = mod["focus"]["hint"].asString();
     }
     m.maxSpeedMmMin = v["limits"]["maxSpeedMmMin"].asNumber(6000);
+    m.accelerationMmS2 = v["limits"]["accelerationMmS2"].asNumber(1000);
     m.sMax = v["controller"]["sMax"].asNumber(1000);
     m.baudRate = int(v["controller"]["baudRate"].asNumber(115200));
     m.airAssistControllable = v["airAssist"]["control"].asString() == "gcode";

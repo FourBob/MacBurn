@@ -47,6 +47,9 @@ public:
 
     bool write(const std::string& data);
     bool writeByte(unsigned char b);   // Echtzeitbefehle: '?', '!', '~', 0x18
+    // Steuerleitungen. Bei ESP32-Steuerungen hängen DTR/RTS an EN/IO0:
+    // gesetzt halten sie den Chip im Reset.
+    bool setLines(bool dtr, bool rts);
     // Liest eine Zeile (ohne \r\n); wartet höchstens timeoutMs.
     std::optional<std::string> readLine(int timeoutMs);
 

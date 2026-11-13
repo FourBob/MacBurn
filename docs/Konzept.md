@@ -164,15 +164,16 @@ Erste Vorlage: [`profiles/machines/mecpow/x3-pro.json`](../profiles/machines/mec
 | Eigenschaft | Wert | Folge für MacBurn |
 |---|---|---|
 | Lasermodul | Diode 10 W optisch, 445 nm, Spot 0,06 × 0,08 mm | Leistungsklasse `diode-10w-445nm` für Systemmaterialien |
-| Arbeitsfläche | 410 × 400 mm, mit Erweiterungskit 750 × 400 mm | Vorlage hat zwei Varianten |
+| Arbeitsfläche | 410 × 410 mm laut Firmware (`$130`/`$131`; Anleitung nennt 410 × 400), mit Erweiterungskit 750 × 410 mm | Vorlage hat zwei Varianten |
 | Ursprung / Homing | vorne links, Endschalter X/Y | Home-Knopf und absolute Positionierung ab v0.1 |
 | Fokus | fester Fokus (40 mm), manuell mit Fokusplatte | Startprüfung zeigt die Fokusplatten-Anleitung statt Z-Steuerung; kein Autofokus |
-| Geschwindigkeit | max. 10 000 mm/min, Gravur empfohlen bis 5 000 mm/min | Grenze für Regler und Zeitschätzung |
+| Geschwindigkeit | Firmware begrenzt auf 6 000 mm/min (`$110`/`$111`), Hersteller nennt 10 000; Beschleunigung 500 mm/s² | Grenze für Regler und Zeitschätzung |
 | Luftunterstützung | eigene Pumpe (30 l/min) mit Drehregler | nicht per M7/M8 schaltbar → bleibt eine Checkbox in der Startprüfung |
 | Sicherheit | Not-Aus, Flammensensor (abschaltbar), Neigungssensor (~50°) | Auslösen muss als klare Meldung erscheinen („Flammensensor hat ausgelöst – Job gestoppt“), nicht als roher Alarmcode |
-| Verbindung | USB-B | Seriell-Treiber zuerst; Hersteller-App deutet auf ein Board mit WLAN hin → später prüfen |
+| Steuerung | MKS DLC32 (ESP32), GRBL 1.1h, Firmware V2.30; `$30=1000`, `$32=1`, Homing und Endschalter aktiv | Standard-GRBL-Treiber genügt |
+| Verbindung | USB-B (CH340, 115 200 Baud) und WLAN (Zugangspunkt, Standard-IP 192.168.4.1) | Seriell zuerst; WLAN-Verbindung ist realistisch und kann früher kommen als geplant |
 
-**Vor dem ersten Code am Gerät prüfen:** Ausgabe von `$I` (Firmware und Board) und `$$` (insbesondere `$30`, `$32`, `$110`–`$121`, `$130`/`$131`), Baudrate, und wie Flammen- und Neigungssensor dem Rechner gemeldet werden. Diese Werte stehen in der Vorlage unter `verify`.
+**Geprüft am 13.11.2026** per `mbprobe` (`$I`, `$$`). Offen ist nur noch: Im Ruhezustand meldet der Status `Pn:P` (Probe-Eingang aktiv). Zu klären ist, ob Flammen- oder Neigungssensor diesen Eingang nutzen, damit MacBurn ein Auslösen richtig erklären kann.
 
 ### 3.3 Materialprofil
 
@@ -447,4 +448,4 @@ Material-Popover → *Neues Material testen* → Assistent erzeugt Testraster �
 | Profil-Logik | Maschine → Material, mit Vererbung und Statusanzeige (Abschnitt 3) |
 | Maschinenbibliothek | Vorlagen für gängige Lasertypen, mindestens mit Arbeitsfläche, Controller und Lasermodul (Abschnitt 3.2) |
 
-**Noch offen:** `$I`/`$$` des X3 Pro auslesen und die mit `verify` markierten Werte der Vorlage bestätigen.
+**Noch offen:** Bedeutung von `Pn:P` beim X3 Pro (Sensor-Eingang?).

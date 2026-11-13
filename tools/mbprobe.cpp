@@ -1,6 +1,7 @@
 // mbprobe – liest Firmware-Info ($I) und Einstellungen ($$) von einem GRBL-Laser.
 // Nutzung: mbprobe            → listet serielle Ports
-//          mbprobe <port> [baud]
+//          mbprobe <port> [baud] [lines]
+//          lines: "low" (Standard, DTR/RTS aus), "high" (beide an), "reset" (ESP32-Reset-Puls)
 // Sendet nur Abfragen, bewegt nichts und schaltet den Laser nicht ein.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "device/Grbl.hpp"
@@ -9,6 +10,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <string>
+#include <unistd.h>
 
 using namespace mb::grbl;
 
@@ -45,7 +47,7 @@ int main(int argc, char** argv) {
         std::printf("Serielle Ports:\n");
         for (auto& p : ports) std::printf("  %s\n", p.c_str());
         if (ports.empty()) std::printf("  (keine – Laser per USB anschließen und einschalten)\n");
-        std::printf("\nNutzung: %s <port> [baud=115200]\n", argv[0]);
+        std::printf("\nNutzung: %s <port> [baud=115200] [low|high|reset]\n", argv[0]);
         return 0;
     }
     int baud = argc > 2 ? std::atoi(argv[2]) : 115200;
@@ -55,6 +57,15 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "Port lässt sich nicht öffnen: %s\n", err.c_str());
         return 1;
     }
+    std::string lines = argc > 3 ? argv[3] : "low";
+    if (lines == "high") port.setLines(true, true);
+    else if (lines == "reset") {
+        port.setLines(false, true);   // EN low
+        usleep(150000);
+        port.setLines(false, false);  // EN high, IO0 high → normaler Start
+    } else port.setLines(false, false);
+    std::printf("Warte auf Start der Steuerung …\n");
+    usleep(2500000);
     std::printf("== Begrüßung ==\n");
     port.write("\r\n\r\n");
     drain(port, 1500, 4000);
