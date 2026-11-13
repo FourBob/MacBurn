@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
+#include "util/Json.hpp"
+
 #include <map>
 #include <optional>
 #include <string>
@@ -81,7 +83,13 @@ struct EffectiveSettings {
     bool airAssist = true;
 };
 
-double wattsOfPowerClass(const std::string& powerClass);   // "diode-10w-445nm" → 10
+double wattsOfPowerClass(const std::string& powerClass);
+
+// Für Projektdateien und Benutzerprofile
+MaterialProfile materialFromJson(const json::Value& v, const std::string& source);
+json::Value materialToJson(const MaterialProfile& m);
+IntentSettings settingsFromJson(const json::Value& v);
+json::Value settingsToJson(const IntentSettings& s);   // "diode-10w-445nm" → 10
 
 class ProfileStore {
 public:

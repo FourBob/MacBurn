@@ -56,6 +56,7 @@ public:
     struct Step {
         std::string label;
         std::function<void(Document&)> apply, revert;
+        uint64_t id = 0;   // vom Stapel vergeben
     };
 
     void perform(Document& doc, Step step);
@@ -66,8 +67,12 @@ public:
     std::string redoLabel() const { return canRedo() ? steps_[pos_].label : std::string(); }
     void undo(Document& doc);
     void redo(Document& doc);
+    void clear() { steps_.clear(); pos_ = 0; }
+    // Kennung des aktuellen Zustands: gleich = gleiches Dokument wie damals (z. B. beim Sichern)
+    uint64_t stateId() const { return pos_ ? steps_[pos_ - 1].id : 0; }
 
 private:
+    uint64_t nextId_ = 1;
     std::vector<Step> steps_;
     size_t pos_ = 0;
 };

@@ -51,6 +51,10 @@ struct ParseError {
     size_t offset = 0;
 };
 
+// Schreibt JSON; pretty = eingerückt (für Menschen und Versionsverwaltung lesbar).
+// Zahlen mit höchstens 4 Nachkommastellen, ohne überflüssige Nullen.
+std::string write(const Value& v, bool pretty = true);
+
 // Liefert den Wert oder setzt error.
 std::optional<Value> parse(const std::string& text, ParseError* error = nullptr);
 std::optional<Value> parseFile(const std::string& path, ParseError* error = nullptr);

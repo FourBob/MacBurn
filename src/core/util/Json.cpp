@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "util/Json.hpp"
 
+#include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
@@ -174,6 +176,95 @@ private:
 };
 
 } // namespace
+
+namespace {
+
+void writeString(std::string& out, const std::string& s) {
+    out += '"';
+    for (unsigned char c : s) {
+        switch (c) {
+            case '"': out += "\\\""; break;
+            case '\\': out += "\\\\"; break;
+            case '\n': out += "\\n"; break;
+            case '\r': out += "\\r"; break;
+            case '\t': out += "\\t"; break;
+            default:
+                if (c < 0x20) { char b[8]; std::snprintf(b, sizeof b, "\\u%04x", c); out += b; }
+                else out += char(c);
+        }
+    }
+    out += '"';
+}
+
+void writeNumber(std::string& out, double d) {
+    if (!std::isfinite(d)) { out += "0"; return; }
+    char b[48];
+    std::snprintf(b, sizeof b, "%.4f", d);
+    std::string s = b;
+    if (s.find('.') != std::string::npos) {
+        while (s.back() == '0') s.pop_back();
+        if (s.back() == '.') s.pop_back();
+    }
+    if (s == "-0") s = "0";
+    out += s;
+}
+
+// Kurze Zahlenlisten (z. B. Punkte [x, y]) bleiben in einer Zeile.
+bool isFlat(const Value& v) {
+    if (!v.isArray() || v.asArray().size() > 8) return false;
+    for (const auto& e : v.asArray()) if (e.isArray() || e.isObject()) return false;
+    return true;
+}
+
+void writeValue(std::string& out, const Value& v, bool pretty, int indent) {
+    auto nl = [&](int lvl) { if (pretty) { out += '\n'; out.append(size_t(lvl) * 2, ' '); } };
+    switch (v.type()) {
+        case Value::Type::Null: out += "null"; break;
+        case Value::Type::Bool: out += v.asBool() ? "true" : "false"; break;
+        case Value::Type::Number: writeNumber(out, v.asNumber()); break;
+        case Value::Type::String: writeString(out, v.asString()); break;
+        case Value::Type::Array: {
+            const auto& a = v.asArray();
+            if (a.empty()) { out += "[]"; break; }
+            bool flat = isFlat(v);
+            out += '[';
+            for (size_t i = 0; i < a.size(); ++i) {
+                if (i) out += flat && pretty ? ", " : ",";
+                if (!flat) nl(indent + 1);
+                writeValue(out, a[i], pretty && !flat, indent + 1);
+            }
+            if (!flat) nl(indent);
+            out += ']';
+            break;
+        }
+        case Value::Type::Object: {
+            const auto& o = v.asObject();
+            if (o.empty()) { out += "{}"; break; }
+            out += '{';
+            bool first = true;
+            for (const auto& [k, val] : o) {
+                if (!first) out += ',';
+                first = false;
+                nl(indent + 1);
+                writeString(out, k);
+                out += pretty ? ": " : ":";
+                writeValue(out, val, pretty, indent + 1);
+            }
+            nl(indent);
+            out += '}';
+            break;
+        }
+    }
+}
+
+} // namespace
+
+std::string write(const Value& v, bool pretty) {
+    std::string out;
+    writeValue(out, v, pretty, 0);
+    if (pretty) out += '\n';
+    return out;
+}
 
 std::optional<Value> parse(const std::string& text, ParseError* error) {
     return Parser(text).run(error);

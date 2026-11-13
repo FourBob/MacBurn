@@ -30,6 +30,7 @@ add_library(macburn_core STATIC
   src/core/app/AppEdit.cpp
   src/core/io/Xml.cpp
   src/core/io/SvgImport.cpp
+  src/core/io/Project.cpp
 )
 target_include_directories(macburn_core PUBLIC src/core)
 target_compile_options(macburn_core PRIVATE -Wall -Wextra -Wpedantic -Wno-missing-field-initializers)

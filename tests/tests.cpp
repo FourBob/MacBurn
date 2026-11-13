@@ -3,6 +3,7 @@
 #include "app/AppController.hpp"
 #include "device/Grbl.hpp"
 #include "device/GrblDevice.hpp"
+#include "io/Project.hpp"
 #include "io/SvgImport.hpp"
 #include "job/Job.hpp"
 #include "profiles/Profiles.hpp"
@@ -11,6 +12,9 @@
 #include <chrono>
 #include <cmath>
 #include <deque>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <mutex>
 #include <thread>
 #include <cstdio>
@@ -21,6 +25,7 @@
 static int failures = 0, checks = 0;
 #define CHECK(cond) do { ++checks; if (!(cond)) { ++failures; std::printf("  FEHLER %s:%d  %s\n", __FILE__, __LINE__, #cond); } } while (0)
 #define NEAR(a, b) CHECK(std::abs(double(a) - double(b)) < 1e-6)
+#define NEAR_OK(a, b) (std::abs(double(a) - double(b)) < 1e-6)
 
 static std::vector<std::pair<const char*, std::function<void()>>> tests;
 #define TEST(name) static void name(); static bool reg_##name = (tests.push_back({#name, name}), true); static void name()
@@ -519,6 +524,111 @@ TEST(import_is_one_selected_object) {
     CHECK(std::abs(r.w - 119) < 0.1);       // ganze Außenkontur
     c.nudge(100, 100);
     CHECK(std::abs(selRect(c).x - 100.5) < 0.1);
+}
+
+// ---------- Projekte ----------
+
+TEST(json_write_roundtrip) {
+    using json::Value;
+    Value v = Value::object({{"text", Value::string("Zeile \"1\"\nÄ\\")}, {"n", Value::number(1.23456789)},
+                             {"p", Value::array({Value::number(0.5), Value::number(-0.0)})}, {"b", Value::boolean(true)}, {"z", Value()}});
+    std::string out = json::write(v);
+    CHECK(out.find("1.2346") != std::string::npos);
+    CHECK(out.find("[0.5, 0]") != std::string::npos);   // Punkte bleiben einzeilig
+    auto back = json::parse(out);
+    CHECK(back.has_value());
+    CHECK((*back)["text"].asString() == "Zeile \"1\"\nÄ\\");
+    CHECK((*back)["z"].isNull());
+}
+
+TEST(project_roundtrip) {
+    ProjectData p;
+    p.doc = Document::sample();
+    p.doc.layers[0].overrides.power = 77;
+    p.doc.layers[2].output = false;
+    p.machineId = "mecpow/x3-pro";
+    p.variantId = "extended";
+    p.materialId = "plywood-poplar-3mm";
+    MaterialProfile mat; mat.id = "plywood-poplar-3mm"; mat.name = "Pappel"; mat.intents[Intent::Cut] = {250.0, 100.0, {}, 1, {}, {}, {}};
+    p.material = mat;
+    p.position = 1;
+    p.anchor = 2;
+    std::string err;
+    auto back = readProject(writeProject(p), &err);
+    CHECK(back.has_value());
+    if (!back) return;
+    CHECK(back->doc.layers.size() == 3);
+    CHECK(back->doc.shapes.size() == p.doc.shapes.size());
+    NEAR(*back->doc.layers[0].overrides.power, 77);
+    CHECK(!back->doc.layers[2].output);
+    CHECK(back->doc.layers[1].intent == Intent::Engrave);
+    CHECK(back->doc.shapes[3].object == 2);
+    CHECK(back->doc.shapes[5].path.closed == false);
+    CHECK(std::abs(back->doc.shapes[0].path.points[7].x - p.doc.shapes[0].path.points[7].x) < 1e-4);
+    CHECK(back->variantId == "extended" && back->position == 1 && back->anchor == 2);
+    CHECK(back->material && NEAR_OK(*back->material->intents[Intent::Cut].speed, 250));
+    CHECK(!readProject("{\"format\":\"anders\"}", &err));
+    CHECK(!readProject("{\"format\":\"macburn\",\"version\":99}", &err));
+    CHECK(err.find("neueren") != std::string::npos);
+}
+
+static std::string tempPath(const std::string& name) {
+    return (std::filesystem::temp_directory_path() / ("macburn-test-" + name)).string();
+}
+
+TEST(controller_save_open_and_modified) {
+    std::string file = tempPath("schild.macburn");
+    {
+        AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+        CHECK(!c.isModified());                       // unverändertes Beispiel
+        c.importFile(std::string(MB_SOURCE_DIR) + "/examples/schild.svg");
+        CHECK(c.isModified());
+        c.nudge(30, 40);
+        c.setChoice("origin", 1);
+        auto r = c.saveProject(file);
+        CHECK(r.ok);
+        CHECK(!c.isModified());
+        CHECK(c.documentTitle() == "macburn-test-schild");
+        c.nudge(1, 0);
+        CHECK(c.isModified());
+        c.undo();
+        CHECK(!c.isModified());                       // zurück auf den gesicherten Stand
+    }
+    AppController d(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    auto r = d.openFile(file);
+    CHECK(r.ok);
+    CHECK(!d.isModified());
+    CHECK(d.documentTitle() == "macburn-test-schild");
+    CHECK(d.positionMode() == 1);
+    CHECK(d.layerRows().size() == 3);
+    d.selectAll();
+    bool found = false;
+    for (auto& f : d.inspector()) if (f.key == "selX") { found = true; CHECK(std::abs(f.value - 30.5) < 0.01); }
+    CHECK(found);
+    std::filesystem::remove(file);
+}
+
+TEST(open_project_with_missing_material_uses_saved_values) {
+    std::string file = tempPath("fremd.macburn");
+    ProjectData p;
+    p.doc = Document::sample();
+    p.machineId = "mecpow/x3-pro";
+    p.materialId = "gibt-es-nicht";
+    MaterialProfile mat; mat.id = "gibt-es-nicht"; mat.name = "Kork 5 mm"; mat.thicknessMm = 5;
+    mat.intents[Intent::Cut] = {111.0, 99.0, {}, 3, {}, {}, {}};
+    mat.intents[Intent::Engrave] = {2222.0, 33.0, {}, {}, {}, {}, {}};
+    mat.intents[Intent::Mark] = {3333.0, 11.0, {}, {}, {}, {}, {}};
+    p.material = mat;
+    { std::ofstream(file) << writeProject(p); }
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    auto r = c.openFile(file);
+    CHECK(r.ok);
+    CHECK(r.message.find("fehlt") != std::string::npos);
+    CHECK(c.materialCard().title.find("Kork") != std::string::npos);
+    CHECK(c.materialCard().subtitle.find("abgeleitet") != std::string::npos);
+    CHECK(c.layerRows()[0].values.find("111") != std::string::npos);
+    std::filesystem::remove(file);
+    CHECK(!c.openFile("/nonexistent/datei.macburn").ok);
 }
 
 int main() {

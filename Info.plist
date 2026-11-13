@@ -32,6 +32,18 @@
     <array>
         <dict>
             <key>CFBundleTypeName</key>
+            <string>MacBurn-Projekt</string>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>LSHandlerRank</key>
+            <string>Owner</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>org.macburn.project</string>
+            </array>
+        </dict>
+        <dict>
+            <key>CFBundleTypeName</key>
             <string>SVG-Grafik</string>
             <key>CFBundleTypeRole</key>
             <string>Viewer</string>
@@ -41,6 +53,27 @@
             <array>
                 <string>public.svg-image</string>
             </array>
+        </dict>
+    </array>
+    <key>UTExportedTypeDeclarations</key>
+    <array>
+        <dict>
+            <key>UTTypeIdentifier</key>
+            <string>org.macburn.project</string>
+            <key>UTTypeDescription</key>
+            <string>MacBurn-Projekt</string>
+            <key>UTTypeConformsTo</key>
+            <array>
+                <string>public.json</string>
+                <string>public.data</string>
+            </array>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array>
+                    <string>macburn</string>
+                </array>
+            </dict>
         </dict>
     </array>
     <key>NSHighResolutionCapable</key>

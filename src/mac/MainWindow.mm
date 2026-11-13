@@ -4,6 +4,7 @@
 #import "InspectorView.h"
 #import "Bridge.hpp"
 #import <objc/runtime.h>
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 static NSToolbarItemIdentifier const kPhase = @"phase";
 static NSToolbarItemIdentifier const kEstimate = @"estimate";
@@ -37,6 +38,7 @@ static NSToolbarItemIdentifier const kPrimary = @"primary";
     self.releasedWhenClosed = NO;
     [self center];
     self.frameAutosaveName = @"MainWindow";
+    self.delegate = self;
 
     NSToolbar* tb = [[NSToolbar alloc] initWithIdentifier:@"main"];
     tb.delegate = self;
@@ -117,7 +119,7 @@ static NSTextField* small(NSString* s, BOOL secondary) {
     // Mitte und rechts
     _canvas = [[CanvasView alloc] initWithFrame:NSZeroRect];
     __weak MainWindow* weakSelf = self;
-    _canvas.onDropFile = ^(NSString* path) { [weakSelf importPath:path]; };
+    _canvas.onDropFile = ^(NSString* path) { [weakSelf openPath:path]; };
     mb::AppController* core = _core;
     _canvas.onKey = ^(int dx, int dy, BOOL shift, BOOL escape, BOOL del) {
         if (escape) {
@@ -355,13 +357,88 @@ static NSTextField* small(NSString* s, BOOL secondary) {
     if (row >= 0 && size_t(row) < _rows.size() && !_rows[size_t(row)].selected) _core->selectLayer(int(row));
 }
 
-- (void)importPath:(NSString*)path {
-    auto r = _core->importFile(STD(path));
-    if (r.ok) return;
+// ---------- Dateien ----------
+
+- (void)showError:(NSString*)title text:(const std::string&)text {
     NSAlert* a = [[NSAlert alloc] init];
-    a.messageText = [NSString stringWithFormat:@"„%@“ lässt sich nicht importieren", path.lastPathComponent];
-    a.informativeText = NS(r.message);
+    a.messageText = title;
+    a.informativeText = NS(text);
     [a beginSheetModalForWindow:self completionHandler:nil];
+}
+
+- (void)openPath:(NSString*)path {
+    void (^go)(void) = ^{
+        auto r = self->_core->openFile(STD(path));
+        if (r.ok) [NSDocumentController.sharedDocumentController noteNewRecentDocumentURL:[NSURL fileURLWithPath:path]];
+        else [self showError:[NSString stringWithFormat:@"„%@“ lässt sich nicht öffnen", path.lastPathComponent] text:r.message];
+    };
+    if ([path.pathExtension.lowercaseString isEqual:@"macburn"])
+        [self confirmUnsavedThen:^(BOOL proceed) { if (proceed) go(); }];
+    else go();   // SVG kommt ins aktuelle Projekt
+}
+
+- (UTType*)projectType {
+    return [UTType typeWithIdentifier:@"org.macburn.project"] ?: [UTType typeWithFilenameExtension:@"macburn"];
+}
+
+- (void)saveThen:(void (^)(BOOL saved))then asNew:(BOOL)asNew {
+    if (!asNew && !_core->documentPath().empty()) {
+        auto r = _core->saveProject(_core->documentPath());
+        if (!r.ok) [self showError:@"Das Projekt lässt sich nicht sichern" text:r.message];
+        if (then) then(r.ok);
+        return;
+    }
+    NSSavePanel* panel = [NSSavePanel savePanel];
+    if (UTType* t = [self projectType]) panel.allowedContentTypes = @[t];
+    panel.nameFieldStringValue = [NS(_core->documentTitle()) stringByAppendingPathExtension:@"macburn"];
+    [panel beginSheetModalForWindow:self completionHandler:^(NSModalResponse resp) {
+        if (resp != NSModalResponseOK) { if (then) then(NO); return; }
+        auto r = self->_core->saveProject(STD(panel.URL.path));
+        if (r.ok) [NSDocumentController.sharedDocumentController noteNewRecentDocumentURL:panel.URL];
+        else [self showError:@"Das Projekt lässt sich nicht sichern" text:r.message];
+        if (then) then(r.ok);
+    }];
+}
+
+- (void)confirmUnsavedThen:(void (^)(BOOL proceed))then {
+    if (!_core->isModified()) { then(YES); return; }
+    NSAlert* a = [[NSAlert alloc] init];
+    a.messageText = [NSString stringWithFormat:@"Änderungen an „%@“ sichern?", NS(_core->documentTitle())];
+    a.informativeText = @"Ohne Sichern gehen die Änderungen verloren.";
+    [a addButtonWithTitle:@"Sichern …"];
+    [a addButtonWithTitle:@"Abbrechen"];
+    [a addButtonWithTitle:@"Nicht sichern"];
+    a.buttons[2].hasDestructiveAction = YES;
+    [a beginSheetModalForWindow:self completionHandler:^(NSModalResponse r) {
+        if (r == NSAlertFirstButtonReturn) [self saveThen:then asNew:NO];
+        else if (r == NSAlertThirdButtonReturn) then(YES);
+        else then(NO);
+    }];
+}
+
+// Menübefehle (über die Responder-Kette)
+- (void)newDocumentCore:(id)sender {
+    [self confirmUnsavedThen:^(BOOL proceed) { if (proceed) self->_core->newDocument(); }];
+}
+- (void)openDocument:(id)sender {
+    NSOpenPanel* panel = [NSOpenPanel openPanel];
+    NSMutableArray<UTType*>* types = [NSMutableArray array];
+    if (UTType* t = [self projectType]) [types addObject:t];
+    if (UTType* svg = [UTType typeWithFilenameExtension:@"svg"]) [types addObject:svg];
+    panel.allowedContentTypes = types;
+    [panel beginSheetModalForWindow:self completionHandler:^(NSModalResponse r) {
+        if (r == NSModalResponseOK) [self openPath:panel.URL.path];
+    }];
+}
+- (void)saveDocument:(id)sender { [self saveThen:nil asNew:NO]; }
+- (void)saveDocumentAs:(id)sender { [self saveThen:nil asNew:YES]; }
+
+- (BOOL)windowShouldClose:(NSWindow*)sender {
+    if (!_core->isModified()) return YES;
+    [self confirmUnsavedThen:^(BOOL proceed) {
+        if (proceed) [self close];
+    }];
+    return NO;
 }
 
 // ---------- Anzeige ----------
@@ -380,6 +457,8 @@ static NSTextField* small(NSString* s, BOOL secondary) {
 
 - (void)refresh {
     self.title = NS(_core->documentTitle());
+    self.representedURL = _core->documentPath().empty() ? nil : [NSURL fileURLWithPath:NS(_core->documentPath())];
+    self.documentEdited = _core->isModified();
     _phase.selectedSegment = NSInteger(_core->phase());
     _estimate.stringValue = [@"⏱ " stringByAppendingString:NS(_core->estimateText())];
     _primary.title = NS(_core->primaryActionTitle());

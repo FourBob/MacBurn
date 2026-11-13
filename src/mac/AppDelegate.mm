@@ -23,12 +23,18 @@
     [self buildMenu];
     _window = [[MainWindow alloc] initWithCore:_core.get()];
     [_window makeKeyAndOrderFront:nil];
-    for (NSString* p in _pending) [_window importPath:p];
+    for (NSString* p in _pending) [_window openPath:p];
     _pending = nil;
     [NSApp activate];
 }
 
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication*)app { return YES; }
+
+- (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication*)app {
+    if (!_window || !_window.isVisible || !_core->isModified()) return NSTerminateNow;
+    [_window confirmUnsavedThen:^(BOOL proceed) { [NSApp replyToApplicationShouldTerminate:proceed]; }];
+    return NSTerminateLater;
+}
 
 // ---------- Menü ----------
 
@@ -49,6 +55,11 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
 
     NSMenu* file = [[NSMenu alloc] initWithTitle:@"Ablage"];
     [file addItem:item(@"Neu", @selector(newDocumentCore:), @"n")];
+    [file addItem:item(@"Öffnen …", @selector(openDocument:), @"o")];
+    [file addItem:NSMenuItem.separatorItem];
+    [file addItem:item(@"Sichern", @selector(saveDocument:), @"s")];
+    [file addItem:item(@"Sichern unter …", @selector(saveDocumentAs:), @"s", NSEventModifierFlagCommand | NSEventModifierFlagShift)];
+    [file addItem:NSMenuItem.separatorItem];
     [file addItem:item(@"Importieren …", @selector(importFile:), @"i")];
     [file addItem:NSMenuItem.separatorItem];
     [file addItem:item(@"G-Code exportieren …", @selector(exportGcode:), @"e", NSEventModifierFlagCommand | NSEventModifierFlagShift)];
@@ -142,7 +153,12 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
 - (void)redoCore:(id)sender { _core->redo(); }
 - (void)showPhase:(NSMenuItem*)sender { _core->setPhase(mb::Phase(sender.tag)); }
 
-- (void)newDocumentCore:(id)sender { _core->newDocument(); }
+
+// Dateibefehle auch dann erreichbar, wenn das Fenster gerade nicht vorne ist
+- (void)newDocumentCore:(id)sender { [_window newDocumentCore:sender]; }
+- (void)openDocument:(id)sender { [_window openDocument:sender]; }
+- (void)saveDocument:(id)sender { [_window saveDocument:sender]; }
+- (void)saveDocumentAs:(id)sender { [_window saveDocumentAs:sender]; }
 
 - (void)selectAll:(id)sender { _core->selectAll(); }
 - (void)deselectAllCore:(id)sender { _core->clearSelection(); }
@@ -168,13 +184,13 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
     panel.allowsMultipleSelection = YES;
     [panel beginSheetModalForWindow:_window completionHandler:^(NSModalResponse r) {
         if (r != NSModalResponseOK) return;
-        for (NSURL* u in panel.URLs) [self->_window importPath:u.path];
+        for (NSURL* u in panel.URLs) [self->_window openPath:u.path];
     }];
 }
 
 // Datei auf das Dock-Symbol oder per „Öffnen mit“
 - (BOOL)application:(NSApplication*)app openFile:(NSString*)path {
-    if (_window) [_window importPath:path];
+    if (_window) [_window openPath:path];
     else { if (!_pending) _pending = [NSMutableArray array]; [_pending addObject:path]; }
     return YES;
 }

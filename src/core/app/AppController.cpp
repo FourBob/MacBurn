@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "app/AppController.hpp"
+#include "io/Project.hpp"
 #include "io/SvgImport.hpp"
+
+#include <fstream>
+#include <sstream>
 
 #include <algorithm>
 #include <cctype>
@@ -121,11 +125,12 @@ void AppController::selectMachine(int index) {
     auto c = choices();
     for (size_t i = 0; i < c.size(); ++i) if (c[i].material->id == matId) { material_ = int(i); break; }
     message_.clear();
+    settingsDirty_ = true;
     changed();
 }
 
-void AppController::selectVariant(int index) { variant_ = index; changed(); }
-void AppController::selectMaterial(int index) { material_ = index; changed(); }
+void AppController::selectVariant(int index) { variant_ = index; settingsDirty_ = true; changed(); }
+void AppController::selectMaterial(int index) { material_ = index; settingsDirty_ = true; changed(); }
 void AppController::selectLayer(int index) { layer_ = index; changed(); }
 
 void AppController::setChoice(const std::string& key, int index) {
@@ -139,9 +144,9 @@ void AppController::setChoice(const std::string& key, int index) {
     } else if (key == "jogStep") {
         jogStep_ = index; changed();
     } else if (key == "origin") {
-        origin_ = index; changed();
+        origin_ = index; settingsDirty_ = true; changed();
     } else if (key == "anchor") {
-        anchor_ = std::clamp(index, 0, 8); changed();
+        anchor_ = std::clamp(index, 0, 8); settingsDirty_ = true; changed();
     }
 }
 
@@ -188,12 +193,108 @@ void AppController::pressButton(const std::string& key) {
     }
 }
 
+bool AppController::isModified() const {
+    if (isSample_ && path_.empty()) return false;   // unverändertes Beispiel
+    return undo_.stateId() != savedState_ || settingsDirty_;
+}
+
+AppController::ImportResult AppController::openFile(const std::string& path) {
+    std::string lower = path;
+    for (auto& ch : lower) ch = char(std::tolower(static_cast<unsigned char>(ch)));
+    if (lower.size() < 8 || lower.substr(lower.size() - 8) != ".macburn") return importFile(path);
+    if (dev_.jobRunning) return {false, "Während ein Auftrag läuft, kann kein Projekt geöffnet werden."};
+
+    std::ifstream in(path, std::ios::binary);
+    if (!in) return {false, "Die Datei lässt sich nicht lesen."};
+    std::stringstream ss;
+    ss << in.rdbuf();
+    std::string err;
+    auto p = readProject(ss.str(), &err);
+    if (!p) return {false, err};
+
+    std::vector<std::string> notes;
+    // Maschine
+    const auto& ms = store_.machines();
+    auto mit = std::find_if(ms.begin(), ms.end(), [&](const MachineProfile& m) { return m.id == p->machineId; });
+    if (mit != ms.end()) machine_ = int(mit - ms.begin());
+    else if (!p->machineId.empty()) notes.push_back("Maschine „" + p->machineId + "“ ist hier nicht eingerichtet");
+    variant_ = 0;
+    if (auto* m = machine())
+        for (size_t i = 0; i < m->variants.size(); ++i) if (m->variants[i].id == p->variantId) variant_ = int(i);
+    // Material; fehlt es, die mitgesicherten Werte verwenden
+    auto pick = [&] {
+        auto c = choices();
+        for (size_t i = 0; i < c.size(); ++i) if (c[i].material->id == p->materialId) { material_ = int(i); return true; }
+        return false;
+    };
+    if (!pick() && p->material) {
+        MaterialProfile snap = *p->material;
+        snap.machine = machine() ? machine()->id : "";
+        snap.name += " (aus Projekt)";
+        store_.add(snap);
+        pick();
+        notes.push_back("Material „" + p->material->name + "“ fehlt hier – die Werte aus dem Projekt werden verwendet");
+    }
+    origin_ = p->position;
+    anchor_ = p->anchor;
+
+    doc_ = std::move(p->doc);
+    undo_.clear();
+    savedState_ = undo_.stateId();
+    settingsDirty_ = false;
+    isSample_ = false;
+    selection_.clear();
+    layer_ = 0;
+    path_ = path;
+    std::string name = path.substr(path.find_last_of('/') + 1);
+    title_ = name.substr(0, name.size() - 8);
+    message_ = name + " geöffnet";
+    for (auto& n : notes) message_ += " · " + n;
+    changed();
+    return {true, message_};
+}
+
+AppController::ImportResult AppController::saveProject(const std::string& path) {
+    ProjectData p;
+    p.doc = doc_;
+    if (auto* m = machine()) {
+        p.machineId = m->id;
+        if (variant_ < int(m->variants.size())) p.variantId = m->variants[size_t(variant_)].id;
+    }
+    if (auto* mat = material()) { p.materialId = mat->id; p.material = *mat; }
+    p.position = origin_;
+    p.anchor = anchor_;
+    std::string tmp = path + ".tmp";
+    {
+        std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
+        if (!out) return {false, "Die Datei lässt sich hier nicht anlegen."};
+        out << writeProject(p);
+        if (!out) return {false, "Beim Schreiben ist ein Fehler aufgetreten."};
+    }
+    if (std::rename(tmp.c_str(), path.c_str()) != 0) {   // erst vollständig schreiben, dann ersetzen
+        std::remove(tmp.c_str());
+        return {false, "Die Datei lässt sich nicht ersetzen."};
+    }
+    path_ = path;
+    std::string name = path.substr(path.find_last_of('/') + 1);
+    title_ = name.size() > 8 && name.substr(name.size() - 8) == ".macburn" ? name.substr(0, name.size() - 8) : name;
+    savedState_ = undo_.stateId();
+    settingsDirty_ = false;
+    isSample_ = false;
+    message_ = "Gesichert.";
+    changed();
+    return {true, message_};
+}
+
 void AppController::newDocument() {
     Document before = doc_, after;
     undo_.perform(doc_, {"Neues Projekt", [after](Document& d) { d = after; }, [before](Document& d) { d = before; }});
     isSample_ = false;
     selection_.clear();
     title_ = "Unbenannt";
+    path_.clear();
+    savedState_ = undo_.stateId();
+    settingsDirty_ = false;
     layer_ = 0;
     message_.clear();
     changed();

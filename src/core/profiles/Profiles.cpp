@@ -106,6 +106,9 @@ MachineProfile machineFromJson(const json::Value& v) {
     return m;
 }
 
+
+} // namespace
+
 IntentSettings settingsFromJson(const json::Value& v) {
     IntentSettings s;
     if (v.has("speed")) s.speed = v["speed"].asNumber();
@@ -133,7 +136,31 @@ MaterialProfile materialFromJson(const json::Value& v, const std::string& source
     return m;
 }
 
-} // namespace
+
+json::Value settingsToJson(const IntentSettings& s) {
+    std::map<std::string, json::Value> o;
+    if (s.speed) o["speed"] = json::Value::number(*s.speed);
+    if (s.power) o["power"] = json::Value::number(*s.power);
+    if (s.minPower) o["minPower"] = json::Value::number(*s.minPower);
+    if (s.passes) o["passes"] = json::Value::number(*s.passes);
+    if (s.lineIntervalMm) o["lineIntervalMm"] = json::Value::number(*s.lineIntervalMm);
+    if (s.dpi) o["dpi"] = json::Value::number(*s.dpi);
+    if (s.airAssist) o["airAssist"] = json::Value::boolean(*s.airAssist);
+    return json::Value::object(std::move(o));
+}
+
+json::Value materialToJson(const MaterialProfile& m) {
+    std::map<std::string, json::Value> intents;
+    for (const auto& [i, st] : m.intents) intents[intentKey(i)] = settingsToJson(st);
+    std::map<std::string, json::Value> o = {
+        {"schema", json::Value::number(1)}, {"id", json::Value::string(m.id)}, {"name", json::Value::string(m.name)},
+        {"category", json::Value::string(m.category)}, {"thicknessMm", json::Value::number(m.thicknessMm)},
+        {"intents", json::Value::object(std::move(intents))}};
+    if (!m.powerClass.empty()) o["powerClass"] = json::Value::string(m.powerClass);
+    if (!m.machine.empty()) o["machine"] = json::Value::string(m.machine);
+    if (!m.note.empty()) o["notes"] = json::Value::string(m.note);
+    return json::Value::object(std::move(o));
+}
 
 void ProfileStore::loadDirectory(const std::string& root, const std::string& source) {
     auto loadAll = [&](const fs::path& dir, bool machines) {
@@ -167,7 +194,9 @@ std::vector<ProfileStore::MaterialChoice> ProfileStore::materialsFor(const Machi
     std::vector<MaterialChoice> out;
     // Zuerst Benutzerprofile genau dieser Maschine.
     for (const auto& m : materials_)
-        if (m.machine == mc.id) out.push_back({&m, m.source == "user" ? MaterialStatus::Tested : MaterialStatus::Vendor});
+        if (m.machine == mc.id)
+            out.push_back({&m, m.source == "user" ? MaterialStatus::Tested
+                             : m.source == "project" ? MaterialStatus::Derived : MaterialStatus::Vendor});
     // Dann Klassenprofile gleicher Lasertechnik, sofern nicht schon getestet vorhanden.
     auto tech = [](const std::string& pc) { return pc.substr(0, pc.find('-')); };
     for (const auto& m : materials_) {

@@ -98,12 +98,14 @@ Document Document::sample() {
 
 void UndoStack::perform(Document& doc, Step step) {
     step.apply(doc);
+    step.id = nextId_++;
     steps_.resize(pos_);
     steps_.push_back(std::move(step));
     ++pos_;
 }
 
 void UndoStack::record(Step step) {
+    step.id = nextId_++;
     steps_.resize(pos_);
     steps_.push_back(std::move(step));
     ++pos_;

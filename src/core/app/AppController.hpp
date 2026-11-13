@@ -87,6 +87,11 @@ public:
     // SVG importieren: Farben werden zu Ebenen (gleiche Farbe = vorhandene Ebene).
     // Ein unverändertes Beispielprojekt wird dabei ersetzt.
     ImportResult importFile(const std::string& path);
+    // Öffnet .macburn-Projekte und importiert SVG
+    ImportResult openFile(const std::string& path);
+    ImportResult saveProject(const std::string& path);
+    bool isModified() const;
+    const std::string& documentPath() const { return path_; }
     std::string documentTitle() const { return title_; }
 
     // --- Formen bearbeiten ---
@@ -150,6 +155,9 @@ private:
     Job job_;
     std::string message_;
     std::string title_ = "Beispiel";
+    std::string path_;
+    uint64_t savedState_ = 0;
+    bool settingsDirty_ = false;
     bool isSample_ = true;
     std::function<void()> onChange_, onStatus_;
     std::function<void(std::function<void()>)> mainQueue_;

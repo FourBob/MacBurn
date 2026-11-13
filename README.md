@@ -26,6 +26,12 @@ open build/MacBurn.app
 ctest --test-dir build --output-on-failure
 ```
 
+## Projekte
+
+*Ablage › Sichern* (⌘S) legt eine `.macburn`-Datei an: lesbares JSON mit Formen, Ebenen, Projekt-Änderungen,
+Maschine, Material, Position und einer Kopie der Materialwerte. So öffnet sich ein Projekt auch auf einem Mac,
+dem das Materialprofil fehlt. Doppelklick im Finder öffnet das Projekt.
+
 ## SVG importieren
 
 *Ablage › Importieren …* (⌘I), Datei auf die Fläche ziehen oder im Finder *Öffnen mit › MacBurn*.
