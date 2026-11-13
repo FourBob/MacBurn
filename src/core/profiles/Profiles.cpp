@@ -36,6 +36,7 @@ std::optional<Intent> intentFromKey(const std::string& key) {
 const char* statusGlyph(MaterialStatus s) {
     switch (s) {
         case MaterialStatus::Tested: return "✓";
+        case MaterialStatus::Vendor: return "◇";
         case MaterialStatus::Derived: return "≈";
         case MaterialStatus::Modified: return "✎";
     }
@@ -44,6 +45,7 @@ const char* statusGlyph(MaterialStatus s) {
 const char* statusLabel(MaterialStatus s) {
     switch (s) {
         case MaterialStatus::Tested: return "getestet";
+        case MaterialStatus::Vendor: return "Herstellerwert";
         case MaterialStatus::Derived: return "abgeleitet";
         case MaterialStatus::Modified: return "geändert";
     }
@@ -125,6 +127,7 @@ MaterialProfile materialFromJson(const json::Value& v, const std::string& source
     m.powerClass = v["powerClass"].asString();
     m.machine = v["machine"].asString();
     m.source = source;
+    m.note = v["notes"].asString();
     for (const auto& [key, val] : v["intents"].asObject())
         if (auto i = intentFromKey(key)) m.intents[*i] = settingsFromJson(val);
     return m;
@@ -164,7 +167,7 @@ std::vector<ProfileStore::MaterialChoice> ProfileStore::materialsFor(const Machi
     std::vector<MaterialChoice> out;
     // Zuerst Benutzerprofile genau dieser Maschine.
     for (const auto& m : materials_)
-        if (m.machine == mc.id) out.push_back({&m, MaterialStatus::Tested});
+        if (m.machine == mc.id) out.push_back({&m, m.source == "user" ? MaterialStatus::Tested : MaterialStatus::Vendor});
     // Dann Klassenprofile gleicher Lasertechnik, sofern nicht schon getestet vorhanden.
     auto tech = [](const std::string& pc) { return pc.substr(0, pc.find('-')); };
     for (const auto& m : materials_) {

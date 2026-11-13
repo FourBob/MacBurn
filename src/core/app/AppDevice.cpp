@@ -169,6 +169,7 @@ std::vector<PreflightCheck> AppController::preflight() const {
     auto st = materialStatus();
     c.push_back({std::string("Material: ") + (material() ? material()->name : "keins"),
                  st == MaterialStatus::Tested ? "Auf dieser Maschine getestet." :
+                 st == MaterialStatus::Vendor ? "Werte aus der Anleitung des Herstellers." :
                  st == MaterialStatus::Modified ? "Mit Änderungen im Projekt." : "Nur abgeleitet. Erst ein Materialtest gibt sichere Werte.",
                  true, st != MaterialStatus::Derived});
     for (size_t i = 0; i < doc_.layers.size(); ++i) {

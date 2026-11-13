@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "id": "plywood-birch-4mm",
+  "name": "Birke-Sperrholz",
+  "category": "Holz",
+  "thicknessMm": 4,
+  "machine": "mecpow/x3-pro",
+  "source": "Mecpow X3/X3 Pro Bedienungsanleitung, Tabelle „Recommended Operating Parameters“ (X3 Pro 10 W)",
+  "intents": {
+    "cut": {
+      "speed": 200,
+      "power": 100,
+      "passes": 1,
+      "airAssist": true
+    },
+    "engrave": {
+      "speed": 5000,
+      "power": 100,
+      "lineIntervalMm": 0.1
+    },
+    "photo": {
+      "speed": 4000,
+      "power": 35,
+      "dpi": 254
+    },
+    "mark": {
+      "speed": 3000,
+      "power": 15
+    }
+  },
+  "notes": "Schneiden (4 mm Platte) und Gravieren (Holzplatte) laut Hersteller. Foto und Markieren aus der Leistungsklasse Diode 10 W."
+}

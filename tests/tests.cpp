@@ -56,7 +56,23 @@ TEST(loads_reference_machine_and_materials) {
     CHECK(!m->airAssistControllable);
     auto mats = store.materialsFor(*m);
     CHECK(mats.size() >= 5);
-    for (auto& c : mats) CHECK(c.status == MaterialStatus::Derived);
+    int vendor = 0;
+    for (auto& c : mats) {
+        CHECK(c.status != MaterialStatus::Tested);
+        if (c.status == MaterialStatus::Vendor) {
+            ++vendor;
+            CHECK(c.material->machine == "mecpow/x3-pro");
+        }
+    }
+    CHECK(vendor >= 3);
+    // Herstellerwert ersetzt das Klassenprofil gleicher Kennung
+    int poplar = 0;
+    for (auto& c : mats) if (c.material->id == "plywood-poplar-3mm") { ++poplar; CHECK(c.status == MaterialStatus::Vendor); }
+    CHECK(poplar == 1);
+    for (auto& c : mats) if (c.material->id == "plywood-poplar-3mm") {
+        auto s = ProfileStore::resolve(*m, *c.material, Intent::Cut);
+        NEAR(s.speed, 250); NEAR(s.power, 100); CHECK(s.passes == 1);
+    }
 }
 
 TEST(resolve_scales_and_applies_overrides) {
@@ -77,7 +93,7 @@ TEST(user_profile_shadows_system_profile) {
     MachineProfile m; m.id = "mecpow/x3-pro"; m.powerClass = "diode-10w-445nm"; m.opticalPowerW = 10;
     store.add(m);
     MaterialProfile sys; sys.id = "plywood"; sys.name = "Sperrholz"; sys.powerClass = "diode-10w-445nm";
-    MaterialProfile usr = sys; usr.machine = "mecpow/x3-pro"; usr.powerClass.clear();
+    MaterialProfile usr = sys; usr.machine = "mecpow/x3-pro"; usr.powerClass.clear(); usr.source = "user";
     store.add(sys); store.add(usr);
     auto c = store.materialsFor(*store.machine("mecpow/x3-pro"));
     CHECK(c.size() == 1);
@@ -135,16 +151,16 @@ TEST(grbl_parsing) {
 
 TEST(controller_undo_and_status) {
     AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
-    CHECK(c.materialCard().subtitle.find("abgeleitet") != std::string::npos);
+    CHECK(c.materialCard().subtitle.find("geändert") == std::string::npos);
     c.selectLayer(0);
     c.setNumber("power", 77);
     CHECK(c.materialCard().subtitle.find("geändert") != std::string::npos);
     CHECK(c.canUndo());
     c.undo();
-    CHECK(c.materialCard().subtitle.find("abgeleitet") != std::string::npos);
+    CHECK(c.materialCard().subtitle.find("geändert") == std::string::npos);
     c.redo();
     c.pressButton("resetAll");
-    CHECK(c.materialCard().subtitle.find("abgeleitet") != std::string::npos);
+    CHECK(c.materialCard().subtitle.find("geändert") == std::string::npos);
     c.setPhase(Phase::Prepare);
     CHECK(!c.renderList().strokes.empty());
     CHECK(c.exportGcode().find("G1") != std::string::npos);

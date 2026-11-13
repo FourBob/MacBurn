@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "id": "leather-veg-2mm",
+  "name": "Leder pflanzlich gegerbt",
+  "category": "Leder & Textil",
+  "thicknessMm": 2,
+  "machine": "mecpow/x3-pro",
+  "source": "Mecpow X3/X3 Pro Bedienungsanleitung, Tabelle „Recommended Operating Parameters“ (X3 Pro 10 W)",
+  "intents": {
+    "cut": {
+      "speed": 2000,
+      "power": 100,
+      "passes": 1,
+      "airAssist": true
+    },
+    "engrave": {
+      "speed": 4500,
+      "power": 100,
+      "lineIntervalMm": 0.1
+    },
+    "photo": {
+      "speed": 5000,
+      "power": 15,
+      "dpi": 254
+    },
+    "mark": {
+      "speed": 5000,
+      "power": 10
+    }
+  },
+  "notes": "Schneiden und Gravieren laut Hersteller. Nur chromfreies Leder lasern."
+}

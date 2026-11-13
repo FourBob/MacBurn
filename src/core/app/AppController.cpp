@@ -338,10 +338,11 @@ std::vector<Field> AppController::inspector() const {
     auto st = materialStatus();
     std::string stText = std::string(statusGlyph(st)) + " ";
     if (st == MaterialStatus::Tested) stText += "Auf dieser Maschine getestet.";
+    else if (st == MaterialStatus::Vendor) stText += "Werte aus der Anleitung des Herstellers. Ein eigener Materialtest kann sie verbessern.";
     else if (st == MaterialStatus::Derived) stText += "Aus Systemprofil abgeleitet. Ein Materialtest wird empfohlen.";
     else stText += "Im Projekt geändert.";
     Field stf{Field::Kind::Info, "", stText};
-    stf.highlight = st != MaterialStatus::Tested;
+    stf.highlight = st == MaterialStatus::Derived || st == MaterialStatus::Modified;
     f.push_back(stf);
 
     auto s = ProfileStore::resolve(*m, *mat, l.intent, l.overrides);

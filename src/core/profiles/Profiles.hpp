@@ -63,10 +63,12 @@ struct MaterialProfile {
     std::string powerClass;    // gilt für eine Leistungsklasse …
     std::string machine;       // … oder für genau eine Maschine (Benutzerprofil)
     std::string source;        // "system" | "user"
+    std::string note;          // Herkunft der Werte, Hinweise
     std::map<Intent, IntentSettings> intents;
 };
 
-enum class MaterialStatus { Tested, Derived, Modified };
+// Getestet (eigener Materialtest) > Herstellerwert (Anleitung) > abgeleitet (Leistungsklasse)
+enum class MaterialStatus { Tested, Vendor, Derived, Modified };
 const char* statusGlyph(MaterialStatus s);   // ✓ ≈ ✎
 const char* statusLabel(MaterialStatus s);
 
@@ -95,7 +97,7 @@ public:
 
     struct MaterialChoice {
         const MaterialProfile* material;
-        MaterialStatus status;   // Tested oder Derived
+        MaterialStatus status;   // Tested, Vendor oder Derived
     };
     // Nur Materialien, die zur Maschine passen; Benutzerprofile dieser Maschine
     // ersetzen gleichnamige Systemprofile.

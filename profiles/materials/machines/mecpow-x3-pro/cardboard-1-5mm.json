@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "id": "cardboard-1-5mm",
+  "name": "Graupappe",
+  "category": "Papier",
+  "thicknessMm": 1.5,
+  "machine": "mecpow/x3-pro",
+  "source": "Mecpow X3/X3 Pro Bedienungsanleitung, Tabelle „Recommended Operating Parameters“ (X3 Pro 10 W)",
+  "intents": {
+    "cut": {
+      "speed": 2500,
+      "power": 100,
+      "passes": 1,
+      "airAssist": true
+    },
+    "engrave": {
+      "speed": 5000,
+      "power": 15,
+      "lineIntervalMm": 0.1
+    },
+    "mark": {
+      "speed": 5000,
+      "power": 8
+    }
+  },
+  "notes": "Schneiden laut Hersteller (Karton). Gravieren und Markieren aus der Leistungsklasse. Brandgefahr – nie unbeaufsichtigt."
+}

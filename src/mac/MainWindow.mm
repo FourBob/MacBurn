@@ -391,6 +391,7 @@ static NSTextField* small(NSString* s, BOOL secondary) {
     }
     _materialSub.stringValue = NS(matc.subtitle);
     _materialSub.textColor = matc.subtitle.find("✓") != std::string::npos ? NSColor.systemGreenColor
+                           : matc.subtitle.find("◇") != std::string::npos ? NSColor.systemTealColor
                            : matc.subtitle.find("✎") != std::string::npos ? NSColor.controlAccentColor : NSColor.systemOrangeColor;
 
     _rows = _core->layerRows();
