@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "id": "cardboard-1-5mm",
+  "name": "Graupappe",
+  "category": "Papier",
+  "thicknessMm": 1.5,
+  "powerClass": "diode-10w-445nm",
+  "intents": {
+    "cut":     { "speed": 800, "power": 80, "passes": 1, "airAssist": true },
+    "engrave": { "speed": 5000, "power": 15, "lineIntervalMm": 0.1 },
+    "mark":    { "speed": 5000, "power": 8 }
+  },
+  "notes": "Startwerte, nicht eingemessen. Brandgefahr – nie unbeaufsichtigt."
+}

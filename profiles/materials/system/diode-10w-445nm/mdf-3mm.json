@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "id": "mdf-3mm",
+  "name": "MDF",
+  "category": "Holz",
+  "thicknessMm": 3,
+  "powerClass": "diode-10w-445nm",
+  "intents": {
+    "cut":     { "speed": 250, "power": 100, "passes": 3, "airAssist": true },
+    "engrave": { "speed": 3000, "power": 30, "lineIntervalMm": 0.1 },
+    "photo":   { "speed": 4000, "power": 25, "dpi": 254 },
+    "mark":    { "speed": 3000, "power": 10 }
+  },
+  "notes": "Startwerte, nicht eingemessen. MDF raucht stark – Absaugung."
+}

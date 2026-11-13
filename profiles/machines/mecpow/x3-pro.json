@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "id": "mecpow/x3-pro",
+  "vendor": "Mecpow",
+  "model": "X3 Pro",
+  "variants": [
+    { "id": "standard", "name": "Standard", "workArea": { "x": 410, "y": 400 } },
+    { "id": "extended", "name": "Mit Erweiterungskit", "workArea": { "x": 750, "y": 400 } }
+  ],
+  "origin": "front-left",
+  "homing": { "available": true, "switches": ["x-min", "y-min"] },
+  "controller": {
+    "firmware": "grbl",
+    "connection": ["usb"],
+    "usbConnector": "USB-B",
+    "baudRate": 115200,
+    "sMax": 1000,
+    "laserMode": true,
+    "verify": ["firmware", "baudRate", "sMax", "laserMode"]
+  },
+  "laserModules": [
+    {
+      "id": "main",
+      "type": "diode",
+      "opticalPowerW": 10,
+      "wavelengthNm": 445,
+      "spotMm": { "x": 0.06, "y": 0.08 },
+      "focus": { "method": "manual-gauge", "focalLengthMm": 40, "hint": "Schraube am Lasermodul lösen, Kopf bis zur Fokusplatte absenken, festziehen." },
+      "powerClass": "diode-10w-445nm"
+    }
+  ],
+  "limits": {
+    "maxSpeedMmMin": 10000,
+    "recommendedEngraveSpeedMaxMmMin": 5000,
+    "verify": ["acceleration"]
+  },
+  "airAssist": { "available": true, "control": "manual", "flowLMin": 30, "note": "Eigene Pumpe mit Drehregler, nicht über M7/M8 schaltbar." },
+  "safety": {
+    "emergencyStop": true,
+    "flameSensor": { "available": true, "switchable": true },
+    "tiltSensor": { "available": true, "thresholdDeg": 50 },
+    "verify": ["how sensor trips are reported to the host (alarm code, pin state)"]
+  },
+  "power": { "supply": "12 V / 5 A", "electricalW": 60 },
+  "sources": [
+    "Mecpow X3/X3 Pro Bedienungsanleitung (manualslib.com/manual/3767002)",
+    "Produktseiten Händler (Spezifikationen)"
+  ],
+  "status": "draft",
+  "notes": "Werte in 'verify' sind nicht aus Herstellerangaben belegt und werden beim ersten Verbinden über $I und $$ geprüft."
+}

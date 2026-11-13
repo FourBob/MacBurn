@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "id": "plywood-poplar-3mm",
+  "name": "Pappel-Sperrholz",
+  "category": "Holz",
+  "thicknessMm": 3,
+  "powerClass": "diode-10w-445nm",
+  "intents": {
+    "cut":     { "speed": 300, "power": 100, "passes": 2, "airAssist": true },
+    "engrave": { "speed": 3000, "power": 35, "lineIntervalMm": 0.1 },
+    "photo":   { "speed": 4000, "power": 30, "minPower": 0, "dpi": 254 },
+    "mark":    { "speed": 3000, "power": 12 }
+  },
+  "notes": "Startwerte, nicht eingemessen. Vor dem ersten Einsatz einen Materialtest machen."
+}

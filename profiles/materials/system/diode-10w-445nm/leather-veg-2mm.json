@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "id": "leather-veg-2mm",
+  "name": "Leder pflanzlich gegerbt",
+  "category": "Leder & Textil",
+  "thicknessMm": 2,
+  "powerClass": "diode-10w-445nm",
+  "intents": {
+    "cut":     { "speed": 400, "power": 90, "passes": 2, "airAssist": true },
+    "engrave": { "speed": 5000, "power": 20, "lineIntervalMm": 0.1 },
+    "photo":   { "speed": 5000, "power": 15, "dpi": 254 },
+    "mark":    { "speed": 5000, "power": 10 }
+  },
+  "notes": "Startwerte, nicht eingemessen. Nur chromfreies Leder lasern."
+}

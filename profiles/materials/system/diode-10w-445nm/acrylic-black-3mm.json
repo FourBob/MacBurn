@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "id": "acrylic-black-3mm",
+  "name": "Acryl schwarz (gegossen)",
+  "category": "Kunststoff",
+  "thicknessMm": 3,
+  "powerClass": "diode-10w-445nm",
+  "intents": {
+    "cut":     { "speed": 200, "power": 100, "passes": 4, "airAssist": true },
+    "engrave": { "speed": 4000, "power": 25, "lineIntervalMm": 0.08 },
+    "mark":    { "speed": 4000, "power": 15 }
+  },
+  "notes": "Startwerte, nicht eingemessen. Transparentes und helles Acryl lässt sich mit blauem Diodenlicht nicht bearbeiten."
+}

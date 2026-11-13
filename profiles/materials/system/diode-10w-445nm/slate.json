@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "id": "slate",
+  "name": "Schiefer",
+  "category": "Stein & Glas",
+  "thicknessMm": 0,
+  "powerClass": "diode-10w-445nm",
+  "intents": {
+    "engrave": { "speed": 2000, "power": 60, "lineIntervalMm": 0.1 },
+    "photo":   { "speed": 2500, "power": 55, "dpi": 300 },
+    "mark":    { "speed": 2000, "power": 50 }
+  },
+  "notes": "Startwerte, nicht eingemessen. Nicht schneidbar."
+}

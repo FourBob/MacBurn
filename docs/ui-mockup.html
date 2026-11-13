@@ -1,0 +1,617 @@
+<title>MacBurn UI-Entwurf</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: Mac-Fenster als zentrales, bedienbares Objekt; darunter Erklärung je Phase und Release-Zeitachse */
+:root{
+  --page:#eef0f3; --fg:#1d1f23; --muted:#6a7079; --line:#d9dce1;
+  --win:#ffffff; --chrome:#f3f4f6; --side:#f6f7f9; --canvas:#e6e8ec; --bed:#fbfbfc; --grid:#e9ebef; --grid2:#d8dbe1;
+  --accent:#0a6cff; --accent-soft:#e3eeff; --ok:#1e9e5a; --warn:#d98a00; --warn-soft:#fff3dc; --danger:#d93a2b;
+  --l-cut:#e5322d; --l-eng:#2463eb; --l-img:#2a2d33; --l-mark:#16a34a;
+  --burn:#7a4320; --burn2:#b07a50; --wood1:#d9b48a; --wood2:#cfa77b;
+  --shadow:0 30px 60px -20px rgba(20,25,40,.35),0 0 0 1px rgba(0,0,0,.08);
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter",system-ui,sans-serif;
+  --display:"Space Grotesk",-apple-system,system-ui,sans-serif;
+  --mono:"SF Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --page:#15171b; --fg:#e8eaed; --muted:#9aa1ab; --line:#33373e;
+  --win:#1f2227; --chrome:#2a2d33; --side:#24272c; --canvas:#17191d; --bed:#2b2e34; --grid:#33373e; --grid2:#41464e;
+  --accent:#3b8bff; --accent-soft:#1d2d4a; --ok:#3cc47c; --warn:#f0a32a; --warn-soft:#3a2e15; --danger:#ff5a4a;
+  --l-cut:#ff5a52; --l-eng:#5b8cff; --l-img:#d6d9de; --l-mark:#3cc47c;
+  --burn:#e0a473; --burn2:#a8754e; --wood1:#6e5137; --wood2:#64492f;
+  --shadow:0 30px 60px -20px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.08); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --page:#15171b; --fg:#e8eaed; --muted:#9aa1ab; --line:#33373e;
+  --win:#1f2227; --chrome:#2a2d33; --side:#24272c; --canvas:#17191d; --bed:#2b2e34; --grid:#33373e; --grid2:#41464e;
+  --accent:#3b8bff; --accent-soft:#1d2d4a; --ok:#3cc47c; --warn:#f0a32a; --warn-soft:#3a2e15; --danger:#ff5a4a;
+  --l-cut:#ff5a52; --l-eng:#5b8cff; --l-img:#d6d9de; --l-mark:#3cc47c;
+  --burn:#e0a473; --burn2:#a8754e; --wood1:#6e5137; --wood2:#64492f;
+  --shadow:0 30px 60px -20px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.08); color-scheme:dark}
+body{background:var(--page);color:var(--fg);font-family:var(--sans);font-size:14px;line-height:1.5}
+.wrap{max-width:1180px;margin:0 auto;padding-block:40px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:40px}
+header.intro{display:grid;gap:8px;max-width:70ch}
+.eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+h1{font-family:var(--display);font-size:clamp(28px,4vw,40px);line-height:1.1;margin:0;text-wrap:balance;font-weight:600}
+h2{font-family:var(--display);font-size:22px;margin:0 0 4px;font-weight:600;text-wrap:balance}
+h3{font-size:15px;margin:0}
+p{margin:0}
+.lead{color:var(--muted);font-size:16px}
+.hint{font-size:13px;color:var(--muted)}
+kbd{font-family:var(--sans);font-size:11px;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 5px;background:var(--win)}
+
+/* ---------- Fenster ---------- */
+.stage{overflow-x:auto;padding:4px 4px 24px}
+.win{min-width:1060px;height:660px;background:var(--win);border-radius:12px;box-shadow:var(--shadow);display:grid;grid-template-rows:52px 1fr 28px;overflow:hidden;position:relative;user-select:none}
+.tb{display:flex;align-items:center;gap:14px;padding:0 14px;background:var(--chrome);border-bottom:1px solid var(--line)}
+.lights{display:flex;gap:8px}.lights i{width:12px;height:12px;border-radius:50%;display:block}
+.lights i:nth-child(1){background:#ff5f57}.lights i:nth-child(2){background:#febc2e}.lights i:nth-child(3){background:#28c840}
+.docname{font-weight:600;font-size:13px;display:flex;flex-direction:column;line-height:1.15;min-width:150px}
+.docname small{font-weight:400;color:var(--muted);font-size:11px}
+.seg{display:flex;background:var(--side);border:1px solid var(--line);border-radius:8px;padding:2px;margin:0 auto}
+.seg button{all:unset;cursor:pointer;padding:5px 16px;border-radius:6px;font-size:13px;font-weight:500;color:var(--muted);display:flex;gap:6px;align-items:center}
+.seg button .n{font-size:10px;opacity:.6}
+.seg button[aria-pressed="true"]{background:var(--win);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.seg button:focus-visible,.btn:focus-visible,.chip:focus-visible,.layer:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.est{font-family:var(--mono);font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums}
+.est b{color:var(--fg);font-weight:600}
+.btn{all:unset;cursor:pointer;font-size:13px;font-weight:600;padding:6px 14px;border-radius:7px;border:1px solid var(--line);background:var(--win);color:var(--fg);display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.danger{color:var(--danger)}
+.btn.small{font-size:12px;padding:4px 10px;font-weight:500}
+.btn[disabled]{opacity:.45;cursor:default}
+.search{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:7px;padding:5px 10px;background:var(--win);cursor:pointer;display:flex;gap:8px;align-items:center}
+
+.body{display:grid;grid-template-columns:220px 1fr 270px;min-height:0}
+.side{background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.insp{background:var(--side);border-left:1px solid var(--line);overflow-y:auto;padding:14px;display:grid;gap:16px;align-content:start}
+.sec-t{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding:12px 14px 6px;display:flex;justify-content:space-between}
+.layers{display:grid;gap:2px;padding:0 8px}
+.layer{all:unset;cursor:pointer;display:grid;grid-template-columns:12px 22px 1fr auto;gap:8px;align-items:center;padding:6px 8px;border-radius:7px;font-size:13px}
+.layer:hover{background:var(--grid)}
+.layer[aria-selected="true"]{background:var(--accent-soft)}
+.layer .sw{width:12px;height:12px;border-radius:3px}
+.layer .ic{font-size:14px;text-align:center;color:var(--muted)}
+.layer .meta{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.layer .warnb{color:var(--warn)}
+.profiles{display:grid;gap:6px;padding:10px 10px 2px}
+.mat{border:1px solid var(--line);background:var(--win);border-radius:10px;padding:8px 12px;cursor:pointer;display:grid;gap:1px;position:relative}
+.mat[aria-expanded="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.st-ok{color:var(--ok)}.st-der{color:var(--warn)}.st-mod{color:var(--accent)}
+.chain{font-size:10px;color:var(--muted);text-align:center;line-height:1}
+.stline{font-size:12px;display:grid;gap:6px;padding:8px 10px;border-radius:8px;background:var(--win);border:1px solid var(--line)}
+.stline .acts2{display:flex;gap:6px;flex-wrap:wrap}
+.pop .it .stc{width:14px;display:inline-block;font-weight:700}
+.mat:hover{border-color:var(--accent)}
+.mat .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.mat .v{font-weight:600}
+.mat .s{font-size:12px;color:var(--muted)}
+.mat .chev{position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--muted)}
+
+.canvas{position:relative;background:var(--canvas);overflow:hidden;display:grid;place-items:center}
+.canvas svg.bed{width:min(92%,540px);height:auto;max-height:92%;border-radius:4px;box-shadow:0 1px 0 rgba(0,0,0,.06),0 0 0 1px var(--grid2)}
+.palette{position:absolute;left:12px;top:50%;transform:translateY(-50%);background:var(--win);border:1px solid var(--line);border-radius:10px;padding:5px;display:grid;gap:2px;box-shadow:0 6px 16px rgba(0,0,0,.08)}
+.palette button{all:unset;cursor:pointer;width:32px;height:32px;display:grid;place-items:center;border-radius:7px;font-size:15px;color:var(--fg)}
+.palette button[aria-pressed="true"]{background:var(--accent);color:#fff}
+.palette hr{border:0;border-top:1px solid var(--line);margin:3px 4px}
+.zoom{position:absolute;right:12px;bottom:12px;font-size:12px;color:var(--muted);background:var(--win);border:1px solid var(--line);border-radius:7px;padding:3px 8px;font-variant-numeric:tabular-nums}
+.banner{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:var(--warn-soft);border:1px solid var(--warn);color:var(--fg);border-radius:9px;padding:6px 8px 6px 12px;font-size:12px;display:flex;gap:10px;align-items:center;white-space:nowrap}
+.banner b{color:var(--warn)}
+.legend{position:absolute;left:12px;bottom:12px;display:flex;gap:12px;font-size:11px;color:var(--muted);background:var(--win);border:1px solid var(--line);border-radius:7px;padding:4px 10px}
+.legend span{display:flex;gap:5px;align-items:center}
+.legend i{width:14px;height:0;border-top:2px solid var(--burn);display:inline-block}
+.legend i.tr{border-top:1px dashed var(--accent)}
+
+.status{display:flex;align-items:center;gap:16px;padding:0 14px;font-size:11.5px;color:var(--muted);background:var(--chrome);border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--ok);display:inline-block;margin-right:6px}
+.status .pos{font-family:var(--mono)}
+.status .right{margin-left:auto}
+
+/* Inspektor-Bausteine */
+.card{display:grid;gap:8px}
+.card h4{margin:0;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.objname{font-weight:600;font-size:14px;display:flex;gap:6px;align-items:center}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.f{display:grid;grid-template-columns:18px 1fr;align-items:center;background:var(--win);border:1px solid var(--line);border-radius:6px;padding:3px 8px;font-size:12px;font-variant-numeric:tabular-nums}
+.f span{color:var(--muted);font-size:11px}
+.f input{all:unset;font-family:var(--mono);font-size:12px;text-align:right;width:100%}
+.chips{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.chip{all:unset;cursor:pointer;border:1px solid var(--line);background:var(--win);border-radius:8px;padding:7px 8px;font-size:12px;display:flex;gap:7px;align-items:center}
+.chip i{font-style:normal;font-size:14px;width:16px;text-align:center}
+.chip[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);font-weight:600}
+.from{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center}
+.from b{color:var(--fg);font-weight:500}
+.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;text-align:center}
+.summary div{background:var(--win);border:1px solid var(--line);border-radius:8px;padding:6px 4px;display:grid}
+.summary b{font-family:var(--mono);font-size:13px;font-variant-numeric:tabular-nums}
+.summary span{font-size:10.5px;color:var(--muted)}
+details{border-top:1px solid var(--line);padding-top:10px}
+summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var(--accent);list-style:none}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"▸ ";}
+details[open] summary::before{content:"▾ "}
+.sl{display:grid;grid-template-columns:86px 1fr 62px;gap:8px;align-items:center;font-size:12px;margin-top:8px}
+.sl input[type=range]{width:100%;accent-color:var(--accent)}
+.sl output{font-family:var(--mono);font-size:11.5px;text-align:right;font-variant-numeric:tabular-nums}
+.tog{display:flex;justify-content:space-between;align-items:center;font-size:12.5px}
+.sw2{width:30px;height:18px;border-radius:9px;background:var(--grid2);position:relative;cursor:pointer;border:0;padding:0}
+.sw2::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .15s}
+.sw2[aria-checked="true"]{background:var(--ok)}
+.sw2[aria-checked="true"]::after{left:14px}
+.devcard{background:var(--win);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:grid;gap:2px}
+.devcard .name{font-weight:600}
+.devcard .sub{font-size:12px;color:var(--muted)}
+.jog{display:grid;grid-template-columns:repeat(3,40px);grid-template-rows:repeat(3,40px);gap:4px;justify-content:center}
+.jog button{all:unset;cursor:pointer;background:var(--win);border:1px solid var(--line);border-radius:8px;display:grid;place-items:center;font-size:14px}
+.jog button:hover{border-color:var(--accent)}
+.jog .home{font-size:13px;color:var(--accent)}
+.jogrow{display:flex;gap:10px;align-items:center;justify-content:space-between}
+.zjog{display:grid;gap:4px}.zjog button{all:unset;cursor:pointer;background:var(--win);border:1px solid var(--line);border-radius:8px;padding:4px 8px;font-size:11px;text-align:center}
+.steps{display:flex;border:1px solid var(--line);border-radius:7px;overflow:hidden;font-size:11.5px}
+.steps button{all:unset;cursor:pointer;flex:1;text-align:center;padding:4px 0;font-family:var(--mono)}
+.steps button[aria-pressed="true"]{background:var(--accent);color:#fff}
+.anchor{display:grid;grid-template-columns:repeat(3,22px);gap:4px}
+.anchor button{all:unset;cursor:pointer;width:22px;height:22px;border-radius:5px;border:1px solid var(--line);background:var(--win);display:grid;place-items:center}
+.anchor button::after{content:"";width:6px;height:6px;border-radius:50%;background:var(--grid2)}
+.anchor button[aria-pressed="true"]::after{background:var(--accent)}
+.origin{display:flex;gap:14px;align-items:center}
+.origin .lbl{font-size:12px;display:grid;gap:4px}
+.origin select{font:inherit;font-size:12px;border:1px solid var(--line);border-radius:6px;padding:3px 6px;background:var(--win);color:var(--fg)}
+.prog{height:6px;border-radius:3px;background:var(--grid2);overflow:hidden}
+.prog div{height:100%;background:var(--accent);width:0;transition:width .3s linear}
+.progtxt{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+
+/* Popover & Sheet */
+.pop{position:absolute;left:228px;top:62px;width:300px;background:var(--win);border:1px solid var(--line);border-radius:12px;box-shadow:0 18px 40px rgba(0,0,0,.25);padding:8px;z-index:20;display:grid;gap:2px}
+.pop input{font:inherit;font-size:13px;border:1px solid var(--line);border-radius:7px;padding:6px 10px;background:var(--side);color:var(--fg);margin-bottom:4px}
+.pop .grp{font-size:11px;color:var(--muted);padding:6px 8px 2px;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.pop button.it{all:unset;cursor:pointer;padding:6px 8px;border-radius:7px;display:flex;justify-content:space-between;gap:8px;font-size:13px}
+.pop button.it:hover,.pop button.it[aria-selected="true"]{background:var(--accent-soft)}
+.pop button.it small{color:var(--muted);font-size:11px}
+.pop .foot{border-top:1px solid var(--line);margin-top:4px;padding-top:6px}
+.scrim{position:absolute;inset:52px 0 0 0;background:rgba(0,0,0,.18);z-index:30;display:flex;justify-content:center;align-items:flex-start}
+.sheet{width:460px;background:var(--win);border:1px solid var(--line);border-top:0;border-radius:0 0 14px 14px;box-shadow:0 20px 50px rgba(0,0,0,.3);padding:20px 22px;display:grid;gap:14px}
+.sheet h3{font-size:16px}
+.check{display:grid;grid-template-columns:22px 1fr auto;gap:10px;align-items:start;font-size:13px}
+.check .st{width:18px;height:18px;border-radius:5px;display:grid;place-items:center;font-size:12px;color:#fff;margin-top:1px}
+.check .st.ok{background:var(--ok)}
+.check .st.wn{background:var(--warn)}
+.check input{width:16px;height:16px;margin:2px 0 0;accent-color:var(--accent)}
+.check small{display:block;color:var(--muted);font-size:12px}
+.sheet .acts{display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--line);padding-top:14px}
+.palette-cmd{position:absolute;top:70px;left:50%;transform:translateX(-50%);width:440px;background:var(--win);border:1px solid var(--line);border-radius:12px;box-shadow:0 24px 50px rgba(0,0,0,.3);padding:8px;z-index:40;display:grid;gap:2px}
+.palette-cmd input{font:inherit;font-size:15px;border:0;background:transparent;color:var(--fg);padding:8px 10px;border-bottom:1px solid var(--line);outline:none}
+.palette-cmd .it{display:flex;justify-content:space-between;padding:6px 10px;border-radius:7px;font-size:13px}
+.palette-cmd .it:first-of-type{background:var(--accent-soft)}
+.palette-cmd .it small{color:var(--muted)}
+
+/* ---------- Erklärung & Zeitachse ---------- */
+.explain{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
+.ph{padding:18px;border-radius:12px;border:1px solid var(--line);background:var(--win);display:grid;gap:8px;align-content:start;transition:border-color .2s}
+.ph.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.ph .tag{font-size:11px;font-family:var(--mono);color:var(--muted)}
+.ph ul{margin:0;padding-left:18px;display:grid;gap:4px;color:var(--fg)}
+.ph li{font-size:13.5px}
+.principles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px}
+.pr{display:grid;gap:4px;align-content:start}
+.pr h3{font-size:14px}
+.pr p{font-size:13px;color:var(--muted)}
+.tl{overflow-x:auto}
+.tl ol{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(6,minmax(150px,1fr));gap:0;min-width:900px;position:relative}
+.tl li{padding:28px 14px 0 0;position:relative;display:grid;gap:4px;align-content:start}
+.tl li::before{content:"";position:absolute;top:8px;left:0;right:0;border-top:2px solid var(--line)}
+.tl li::after{content:"";position:absolute;top:2px;left:0;width:10px;height:10px;border-radius:50%;background:var(--win);border:2px solid var(--accent)}
+.tl li:first-child::after{background:var(--accent)}
+.tl .v{font-family:var(--mono);font-size:12px;color:var(--accent);font-weight:600}
+.tl h3{font-size:14px}
+.tl p{font-size:12.5px;color:var(--muted)}
+.tl .w{font-size:11px;color:var(--muted);font-family:var(--mono)}
+@media (max-width:860px){.explain,.principles{grid-template-columns:1fr 1fr}}
+@media (max-width:560px){.explain,.principles{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&display=swap">
+
+<div class="wrap">
+  <header class="intro">
+    <div class="eyebrow">UI/UX-Entwurf · Open Source · macOS 27</div>
+    <h1>MacBurn – Laser-Software, die sich wie ein Mac anfühlt</h1>
+    <p class="lead">Ein bedienbarer Entwurf des Hauptfensters. Schalte oben zwischen den drei Phasen um (oder <kbd>⌘1</kbd> <kbd>⌘2</kbd> <kbd>⌘3</kbd>). Wähle oben links erst die Maschine, dann das Material, wie Drucker und Filament beim 3D-Druck. Klicke außerdem auf Ebenen, Absichten und den blauen Hauptknopf. <kbd>⌘K</kbd> öffnet die Befehlspalette.</p>
+  </header>
+
+  <div class="stage">
+    <div class="win" id="win">
+      <div class="tb">
+        <div class="lights"><i></i><i></i><i></i></div>
+        <div class="docname">Untersetzer &amp; Anhänger<small>Bearbeitet · .macburn</small></div>
+        <div class="seg" role="group" aria-label="Phase">
+          <button id="p1" data-phase="1" aria-pressed="true">Gestalten <span class="n">⌘1</span></button>
+          <button id="p2" data-phase="2" aria-pressed="false">Vorbereiten <span class="n">⌘2</span></button>
+          <button id="p3" data-phase="3" aria-pressed="false">Lasern <span class="n">⌘3</span></button>
+        </div>
+        <div class="search" id="cmdBtn">⌕ Befehl … <kbd>⌘K</kbd></div>
+        <div class="est" title="Geschätzte Laufzeit">⏱ <b id="est">11:40</b></div>
+        <div id="mainActs" style="display:flex;gap:6px"></div>
+      </div>
+
+      <div class="body">
+        <aside class="side">
+          <div class="profiles">
+            <div class="mat" id="macCard" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false">
+              <span class="k">Maschine</span>
+              <span class="v" id="macName">Mecpow X3 Pro</span>
+              <span class="s" id="macSub">Diode 10 W · 445 nm</span>
+              <span class="chev">⌄</span>
+            </div>
+            <div class="chain">↓</div>
+            <div class="mat" id="matCard" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false">
+              <span class="k">Material</span>
+              <span class="v" id="matName">Pappel-Sperrholz</span>
+              <span class="s" id="matSub">3 mm · ✓ getestet</span>
+              <span class="chev">⌄</span>
+            </div>
+          </div>
+          <div class="sec-t" style="margin-top:6px"><span>Ebenen</span><span>Werte</span></div>
+          <div class="layers" id="layers" role="listbox" aria-label="Ebenen"></div>
+          <div class="sec-t" style="margin-top:10px"><span>Objekte</span></div>
+          <div class="layers" style="font-size:12.5px;color:var(--muted);padding:0 16px;display:grid;gap:5px">
+            <div>◯ Kreis 140 mm</div><div style="color:var(--fg);font-weight:600">T&nbsp; Text „Werkstatt“</div><div>▧ Foto Hund.heic</div><div>▢ Anhänger</div><div>∿ Ritzlinie</div>
+          </div>
+        </aside>
+
+        <main class="canvas" id="canvas">
+          <svg class="bed" id="bed" viewBox="0 0 400 400" aria-label="Arbeitsfläche 400 × 400 mm"></svg>
+          <div class="palette" id="palette">
+            <button aria-pressed="true" title="Auswählen (V)">➤</button>
+            <button aria-pressed="false" title="Knoten (A)">◇</button>
+            <hr>
+            <button aria-pressed="false" title="Rechteck (R)">▢</button>
+            <button aria-pressed="false" title="Ellipse (E)">◯</button>
+            <button aria-pressed="false" title="Polygon (P)">⬡</button>
+            <button aria-pressed="false" title="Stift (B)">✎</button>
+            <button aria-pressed="false" title="Text (T)">T</button>
+            <hr>
+            <button aria-pressed="false" title="Bild importieren (⌘I)">▧</button>
+          </div>
+          <div class="zoom">100 % · 400 × 400 mm</div>
+        </main>
+
+        <aside class="insp" id="insp"></aside>
+      </div>
+
+      <div class="status">
+        <span><span class="dot"></span><span id="dev">Mecpow X3 Pro · USB · verbunden</span></span>
+        <span class="pos" id="pos">X 0.0  Y 0.0</span>
+        <span id="state">Bereit</span>
+        <span class="right">Fangen: Raster 1 mm · mm/min</span>
+      </div>
+
+      <div class="pop" id="matPop" hidden></div>
+      <div class="scrim" id="scrim" hidden><div class="sheet" id="sheet"></div></div>
+      <div class="palette-cmd" id="cmd" hidden>
+        <input id="cmdIn" placeholder="Befehl oder Material suchen" aria-label="Befehl suchen">
+        <div class="it"><span>Spiegeln horizontal</span><small>⇧H</small></div>
+        <div class="it"><span>Vereinen (Boolesch)</span><small>⌥⌘U</small></div>
+        <div class="it"><span>Material: Acryl schwarz 3 mm</span><small>Material</small></div>
+        <div class="it"><span>Pfad schließen</span><small>⌘J</small></div>
+        <div class="it"><span>Materialtest erstellen …</span><small>Assistent</small></div>
+      </div>
+    </div>
+  </div>
+
+  <section class="explain" aria-label="Die drei Phasen">
+    <div class="ph on" id="e1"><span class="tag">⌘1</span><h2>Gestalten</h2>
+      <ul><li>Schwebende Werkzeugpalette, Fläche im Mittelpunkt</li><li>Inspektor zeigt nur das ausgewählte Objekt</li><li>Absicht direkt am Objekt: Schneiden, Gravieren, Foto, Markieren</li><li>SVG, PDF, Fotos per Drag &amp; Drop; Farben werden zu Ebenen</li></ul></div>
+    <div class="ph" id="e2"><span class="tag">⌘2</span><h2>Vorbereiten</h2>
+      <ul><li>Linien in Brennfarbe statt Ebenenfarbe, Leerfahrten gestrichelt</li><li>Werte kommen aus dem Material, Zahlen nur bei Bedarf aufklappen</li><li>Probleme als Hinweis am Objekt, mit Ein-Klick-Lösung</li><li>Reihenfolge und Optimierung als einfache Schalter</li></ul></div>
+    <div class="ph" id="e3"><span class="tag">⌘3</span><h2>Lasern</h2>
+      <ul><li>Kamerabild als Hintergrund, Laserkopf live</li><li>Steuerkreuz, Schrittweite, Ursprung mit 9-Punkt-Anker</li><li>Ein Hauptknopf: Rahmen → Lasern → Pause</li><li>Startprüfung als Sheet, keine Dialoge während des Jobs</li></ul></div>
+  </section>
+
+  <section style="display:grid;gap:16px">
+    <h2>Was die Bedienung leiten soll</h2>
+    <div class="principles">
+      <div class="pr"><h3>Maschine → Material</h3><p>Wie Drucker und Filament beim 3D-Druck: Die Maschine bestimmt, welche Materialien passen. Jedes Material zeigt, ob es auf dieser Maschine getestet, nur abgeleitet oder im Projekt geändert ist.</p></div>
+      <div class="pr"><h3>Drei Phasen</h3><p>Gestalten, Vorbereiten, Lasern. Jede Ansicht zeigt nur, was dort gebraucht wird. Springen ist jederzeit möglich.</p></div>
+      <div class="pr"><h3>Fehler früh zeigen</h3><p>Offene Konturen, Objekte außerhalb der Fläche oder fehlender Fokus fallen vor dem Start auf, direkt am Objekt.</p></div>
+      <div class="pr"><h3>Echter Mac</h3><p>Menüleiste, Trackpad-Gesten, Dark Mode, Quick Look, Befehlspalette, Continuity-Kamera vom iPhone.</p></div>
+    </div>
+  </section>
+
+  <section style="display:grid;gap:16px">
+    <h2>Release-Plan</h2>
+    <div class="tl"><ol>
+      <li><span class="v">v0.1</span><h3>Erster Schnitt</h3><p>GRBL über USB, SVG &amp; Fotos, Grundformen, Text, Absichten, Profile Maschine → Material, Vorschau, Startprüfung</p><span class="w">8–10 Wochen</span></li>
+      <li><span class="v">v0.2</span><h3>Werkstatt</h3><p>Knoten, Boolesch, Offset, Anordnungen, PDF/DXF, alle Rasterverfahren, Materialtest-Assistent</p><span class="w">6 Wochen</span></li>
+      <li><span class="v">v0.3</span><h3>Kontrolle</h3><p>Pfadoptimierung, Laschen, Kerf, GRBL-Editor, WLAN-Geräte, Zeitachse, öffentliche Beta</p><span class="w">5 Wochen</span></li>
+      <li><span class="v">v0.5</span><h3>Kamera</h3><p>Kamera-Overlay inkl. iPhone, Kalibrierung, Nachzeichnen, Text auf Pfad, Seriennummern</p><span class="w">6 Wochen</span></li>
+      <li><span class="v">v0.7</span><h3>Erweiterungen</h3><p>Drehachse, mehrere Lasermodule pro Maschine, optional CO₂ über Ruida</p><span class="w">6 Wochen</span></li>
+      <li><span class="v">v1.0</span><h3>Fertig</h3><p>Feinschliff, VoiceOver, DE/EN, Hilfe in der App, signiertes DMG auf GitHub, Auto-Update</p><span class="w">4 Wochen</span></li>
+    </ol></div>
+    <p class="hint">Vollständiges Konzept mit Funktionsliste und Architektur: docs/Konzept.md im Projektordner.</p>
+  </section>
+</div>
+
+<script>
+(()=>{
+const $=s=>document.querySelector(s);
+/* Maschinen des Nutzers (angelegt aus der Bibliothek) */
+const MACHINES=[
+ {id:"d1",n:"Mecpow X3 Pro",w:10,mod:"Diode 10 W · 445 nm",area:"410 × 400 mm",ctl:"GRBL · USB"},
+ {id:"s30",n:"Sculpfun S30",w:5,mod:"Diode 5 W · 455 nm",area:"410 × 400 mm",ctl:"GRBL 1.1f · USB"},
+];
+/* Maschinenbibliothek (Beispiele, Werte vor Aufnahme prüfen) */
+const LIB=[
+ {b:"Mecpow",m:[["X3 5 W",5,"410 × 400 mm"],["X3 Pro mit Erweiterung",10,"750 × 400 mm"]]},
+ {b:"xTool",m:[["D1 Pro 20 W",20,"430 × 390 mm"],["S1 20 W",20,"498 × 319 mm"]]},
+ {b:"Sculpfun",m:[["S9",5.5,"410 × 420 mm"],["S30 Pro Max",20,"410 × 400 mm"]]},
+ {b:"Atomstack",m:[["A10 Pro",10,"410 × 400 mm"],["X20 Pro",20,"400 × 400 mm"]]},
+ {b:"Ortur",m:[["Laser Master 3",10,"400 × 400 mm"]]},
+ {b:"Creality",m:[["Falcon2 22 W",22,"400 × 415 mm"]]},
+];
+/* Materialprofile: Basiswerte für Diode 10 W, tested = Maschinen mit eingemessenem Profil */
+const MATS=[
+ {g:"Holz",n:"Pappel-Sperrholz",d:"3 mm",cut:[300,100,2],eng:[3000,35],img:[4000,30,254],sec:700,tested:["d1"]},
+ {g:"Holz",n:"Birke-Sperrholz",d:"4 mm",cut:[240,100,3],eng:[3000,40],img:[4000,35,254],sec:920,tested:["d1"]},
+ {g:"Holz",n:"Walnuss massiv",d:"5 mm",cut:[180,100,5],eng:[2500,45],img:[3500,40,300],sec:1445,tested:[]},
+ {g:"Kunststoff",n:"Acryl schwarz (gegossen)",d:"3 mm",cut:[200,100,4],eng:[4000,25],img:[5000,20,254],sec:1130,tested:["s30"]},
+ {g:"Andere",n:"Leder pflanzlich gegerbt",d:"2 mm",cut:[400,90,2],eng:[5000,20],img:[6000,15,254],sec:490,tested:["d1"]},
+ {g:"Andere",n:"Schiefer",d:"–",cut:null,eng:[2000,60],img:[2500,55,300],sec:870,tested:[]},
+];
+let mac=0, mat=0, phase=1, sel="eng", jobRun=false, jobP=0, timer=null, framed=false, step=1, anchor=0;
+let ov={};            // Projekt-Abweichungen je Ebene
+const LAYERS=[
+ {id:"cut",n:"Schnitt",c:"--l-cut",i:"✂︎",a:"Schneiden",warn:true},
+ {id:"eng",n:"Gravur",c:"--l-eng",i:"▦",a:"Gravieren"},
+ {id:"img",n:"Foto",c:"--l-img",i:"◐",a:"Foto"},
+ {id:"mark",n:"Ritzen",c:"--l-mark",i:"⌇",a:"Markieren"},
+];
+const M=()=>MACHINES[mac], T=()=>MATS[mat];
+const r10=v=>Math.round(v/10)*10;
+/* resolve(machine, material, intent, overrides) – wie im Konzept */
+function resolve(lid){
+  const m=T(), f=M().w/10;
+  let v;
+  if(lid==="cut") v=m.cut?{speed:r10(m.cut[0]*f),power:m.cut[1],passes:m.cut[2]}:null;
+  else if(lid==="img") v={speed:Math.min(6000,r10(m.img[0]*f)),power:m.img[1],passes:1,dpi:m.img[2]};
+  else if(lid==="eng") v={speed:Math.min(6000,r10(m.eng[0]*f)),power:m.eng[1],passes:1};
+  else v={speed:Math.min(6000,r10(m.eng[0]*f)),power:10,passes:1};
+  return v?Object.assign({},v,ov[lid]||{}):null;
+}
+const modified=()=>Object.keys(ov).length>0;
+const status=()=>modified()?"mod":T().tested.includes(M().id)?"ok":"der";
+const ST={ok:["✓","getestet","st-ok"],der:["≈","abgeleitet","st-der"],mod:["✎","geändert","st-mod"]};
+function est(){const s=Math.round(T().sec*10/M().w);return String(Math.floor(s/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0");}
+
+function bed(){
+  const P=phase, burn=P>=2;
+  const col=id=>burn?(id==="mark"?"var(--burn2)":"var(--burn)"):`var(${LAYERS.find(l=>l.id===id).c})`;
+  let g="";
+  if(P===3){
+    g+=`<defs><pattern id="wood" width="400" height="14" patternUnits="userSpaceOnUse"><rect width="400" height="14" fill="var(--wood1)"/><path d="M0 7 Q100 3 200 8 T400 6" stroke="var(--wood2)" stroke-width="3" fill="none"/></pattern></defs>`;
+    g+=`<rect width="400" height="400" fill="var(--canvas)"/><rect x="70" y="80" width="300" height="260" rx="2" fill="url(#wood)" opacity=".9"/>`;
+    g+=`<text x="6" y="394" font-size="8" fill="var(--muted)" font-family="-apple-system,sans-serif">Kamera · iPhone (Continuity) · kalibriert</text>`;
+  } else {
+    g+=`<rect width="400" height="400" fill="var(--bed)"/>`;
+    for(let i=10;i<400;i+=10){const s=i%50?"var(--grid)":"var(--grid2)";g+=`<line x1="${i}" y1="0" x2="${i}" y2="400" stroke="${s}" stroke-width=".5"/><line x1="0" y1="${i}" x2="400" y2="${i}" stroke="${s}" stroke-width=".5"/>`}
+  }
+  g+=`<defs><pattern id="dith" width="3" height="3" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r=".7" fill="${burn?'var(--burn)':'var(--l-img)'}"/></pattern>
+  <pattern id="hatch" width="2" height="2" patternUnits="userSpaceOnUse"><line x1="0" y1="1" x2="2" y2="1" stroke="var(--burn)" stroke-width=".9"/></pattern>
+  <mask id="dm"><rect x="115" y="187" width="70" height="42" fill="#fff"/><ellipse cx="150" cy="208" rx="16" ry="14" fill="#000"/><ellipse cx="139" cy="196" rx="5" ry="8" fill="#000"/><ellipse cx="161" cy="196" rx="5" ry="8" fill="#000"/></mask></defs>`;
+  g+=`<circle cx="150" cy="180" r="70" fill="none" stroke="${col('cut')}" stroke-width="${burn?1.4:1}"/>`;
+  g+=`<rect x="115" y="187" width="70" height="42" fill="url(#dith)" mask="url(#dm)"/>`;
+  g+=`<rect x="115" y="187" width="70" height="42" fill="none" stroke="${burn?'none':'var(--l-img)'}" stroke-width=".4" stroke-dasharray="2 2"/>`;
+  const tfill=burn?'url(#hatch)':'var(--l-eng)';
+  g+=`<text x="150" y="160" text-anchor="middle" font-family="Avenir Next,Futura,-apple-system,sans-serif" font-weight="700" font-size="22" fill="${tfill}">Werkstatt</text>`;
+  g+=`<text x="150" y="245" text-anchor="middle" font-family="Avenir Next,-apple-system,sans-serif" font-size="9" letter-spacing="3" fill="${tfill}">SEIT 2026</text>`;
+  g+=`<rect x="262" y="110" width="80" height="140" rx="14" fill="none" stroke="${col('cut')}" stroke-width="${burn?1.4:1}"/>`;
+  g+=`<circle cx="302" cy="128" r="6" fill="none" stroke="${col('cut')}" stroke-width="${burn?1.4:1}"/>`;
+  g+=`<path d="M302 225 C270 200 278 168 302 182 C326 168 334 200 302 225Z" fill="${burn?'url(#hatch)':'var(--l-eng)'}" fill-opacity="${burn?1:.85}"/>`;
+  g+=`<path d="M70 300 C130 280 200 320 260 296" fill="none" stroke="${col('cut')}" stroke-width="${burn?1.2:1}"/>`;
+  g+=`<path d="M262 310 L262 340 M342 310 L342 340" stroke="${col('mark')}" stroke-width="${burn?.8:1}" fill="none"/>`;
+  if(P===2){
+    g+=`<path d="M0 0 L80 180 M220 180 L262 110 M342 250 L260 296 M70 300 L262 310" stroke="var(--accent)" stroke-width=".6" stroke-dasharray="3 3" fill="none" opacity=".8"/>`;
+    if(LAYERS[0].warn) g+=`<g transform="translate(262 288)"><path d="M0 -9 L8 5 L-8 5Z" fill="var(--warn)"/><text x="0" y="3.5" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">!</text></g>`;
+  }
+  if(P===1&&sel==="eng"){
+    g+=`<rect x="92" y="140" width="116" height="26" fill="none" stroke="var(--accent)" stroke-width=".7"/>`;
+    [[92,140],[150,140],[208,140],[92,166],[150,166],[208,166],[92,153],[208,153]].forEach(([x,y])=>g+=`<rect x="${x-2}" y="${y-2}" width="4" height="4" fill="var(--win)" stroke="var(--accent)" stroke-width=".7"/>`);
+    g+=`<text x="150" y="134" text-anchor="middle" font-size="7" fill="var(--accent)" font-family="-apple-system,sans-serif">116,0 × 26,0 mm</text>`;
+  }
+  if(P===3){
+    if(framed) g+=`<rect x="70" y="100" width="282" height="250" fill="none" stroke="var(--accent)" stroke-width="1" stroke-dasharray="5 3"/>`;
+    const a=jobP/100*Math.PI*2*3, on=jobRun||jobP>0, hx=on?150+70*Math.cos(a):10, hy=on?180+70*Math.sin(a):10;
+    g+=`<g><circle cx="${hx}" cy="${hy}" r="7" fill="none" stroke="var(--danger)" stroke-width="1.2"/><circle cx="${hx}" cy="${hy}" r="1.6" fill="var(--danger)"/><line x1="${hx-12}" y1="${hy}" x2="${hx+12}" y2="${hy}" stroke="var(--danger)" stroke-width=".5"/><line x1="${hx}" y1="${hy-12}" x2="${hx}" y2="${hy+12}" stroke="var(--danger)" stroke-width=".5"/></g>`;
+    $("#pos").textContent=`X ${hx.toFixed(1)}  Y ${(400-hy).toFixed(1)}`;
+  }
+  $("#bed").innerHTML=g;
+  const c=$("#canvas"); c.querySelectorAll(".banner,.legend").forEach(e=>e.remove());
+  if(P===2){
+    if(LAYERS[0].warn){c.insertAdjacentHTML("beforeend",`<div class="banner"><b>⚠</b> „Ritzlinie“ ist offen, liegt aber auf <b>Schneiden</b>. <button class="btn small" id="fixOpen">Als Markieren behandeln</button></div>`);
+      $("#fixOpen").onclick=()=>{LAYERS[0].warn=false;render();};}
+    c.insertAdjacentHTML("beforeend",`<div class="legend"><span><i></i>Brennen</span><span><i class="tr"></i>Leerfahrt</span><span>4 Ebenen · 9 Objekte</span></div>`);
+  }
+  $("#palette").hidden = P!==1;
+}
+
+function meta(){
+  const m=M(), t=T(), [ic,tx,cl]=ST[status()];
+  $("#macName").textContent=m.n; $("#macSub").textContent=m.mod;
+  $("#matName").textContent=t.n; $("#matSub").innerHTML=`${t.d} · <span class="${cl}">${ic} ${tx}</span>`;
+  $("#est").textContent=est(); $("#dev").textContent=`${m.n} · ${m.ctl.split(" · ")[1]} · verbunden`;
+  $("#layers").innerHTML=LAYERS.map(l=>{const v=resolve(l.id);
+    const mt=!v?"—":l.id==="img"?`${v.dpi} dpi`:`${v.speed}·${v.power}%`;
+    return `<button class="layer" role="option" aria-selected="${sel===l.id}" data-l="${l.id}"><span class="sw" style="background:var(${l.c})"></span><span class="ic">${l.i}</span><span>${l.n}${l.warn&&phase===2?' <span class="warnb">⚠</span>':''}</span><span class="meta${ov[l.id]?' st-mod':''}">${mt}</span></button>`}).join("");
+  document.querySelectorAll(".layer").forEach(b=>b.onclick=()=>{sel=b.dataset.l;render();});
+  const sl=$("#matStatus"); if(sl) sl.innerHTML=statusLine();
+  bindStatus();
+}
+
+function statusLine(){
+  const s=status(), m=M();
+  if(s==="ok") return `<span class="st-ok">✓ Auf ${m.n} getestet · Benutzerprofil</span>`;
+  if(s==="der") return `<span class="st-der">≈ Abgeleitet aus Systemprofil „Diode 10 W“. Ein Materialtest auf ${m.n} wird empfohlen.</span><div class="acts2"><button class="btn small" id="stTest">Materialtest erstellen …</button></div>`;
+  return `<span class="st-mod">✎ Im Projekt geändert (${Object.keys(ov).length} ${Object.keys(ov).length>1?"Ebenen":"Ebene"})</span><div class="acts2"><button class="btn small" id="stSave">Als Material speichern</button><button class="btn small" id="stReset">Zurücksetzen</button></div>`;
+}
+function bindStatus(){
+  const s=$("#stSave"),r=$("#stReset"),t=$("#stTest");
+  if(s) s.onclick=()=>{const m=T(), f=M().w/10;
+    Object.entries(ov).forEach(([lid,o])=>{const tg=lid==="cut"?m.cut:lid==="img"?m.img:lid==="eng"?m.eng:null; if(!tg)return;
+      if(o.speed!=null)tg[0]=r10(o.speed/f); if(o.power!=null)tg[1]=o.power; if(o.passes!=null&&lid==="cut")tg[2]=o.passes;});
+    if(!m.tested.includes(M().id))m.tested.push(M().id); ov={}; render();};
+  if(r) r.onclick=()=>{ov={};render();};
+  if(t) t.onclick=()=>{T().tested.push(M().id);render();};
+}
+
+function intentChips(cur){
+  return `<div class="chips">${LAYERS.map(l=>`<button class="chip" aria-pressed="${l.a===cur}" data-a="${l.a}"><i>${l.i}</i>${l.a}</button>`).join("")}</div>`;
+}
+
+function insp(){
+  const m=T(), L=LAYERS.find(l=>l.id===sel), mc=M();
+  let h="";
+  if(phase===1){
+    h=`<div class="card"><div class="objname">T&nbsp; Text „Werkstatt“</div>
+      <div class="fields"><label class="f"><span>X</span><input id="fx" value="92,0"></label><label class="f"><span>Y</span><input id="fy" value="140,0"></label>
+      <label class="f"><span>B</span><input id="fw" value="116,0"></label><label class="f"><span>H</span><input id="fh" value="26,0"></label>
+      <label class="f"><span>∠</span><input id="fr" value="0°"></label><label class="f"><span>⛓</span><input id="fl" value="Proport."></label></div></div>
+      <div class="card"><h4>Schrift</h4><div class="fields" style="grid-template-columns:1fr"><label class="f" style="grid-template-columns:1fr auto"><input id="ff" style="text-align:left" value="Avenir Next · Fett"><span>⌄</span></label></div>
+      <div class="fields"><label class="f"><span>pt</span><input id="fs" value="22 mm"></label><label class="f"><span>↔</span><input id="fsp" value="0"></label></div></div>
+      <div class="card"><h4>Absicht</h4>${intentChips(L.a)}<div class="from">Ebene <b>${L.n}</b> · Werte aus <b>${m.n} ${m.d}</b></div></div>
+      <div class="card"><h4>Anordnen</h4><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn small">⇤ Links</button><button class="btn small">⇹ Mitte</button><button class="btn small">Gruppieren</button><button class="btn small">In Pfad</button></div></div>`;
+  } else if(phase===2){
+    const v=resolve(L.id);
+    h=`<div class="card"><div class="objname"><span class="sw" style="width:12px;height:12px;border-radius:3px;background:var(${L.c})"></span>Ebene ${L.n}</div>${intentChips(L.a)}</div>
+      <div class="card"><h4>Maschine → Material</h4><div class="from"><b>${mc.n}</b> → <b>${m.n} ${m.d}</b></div>
+      <div class="stline" id="matStatus">${statusLine()}</div>
+      ${!v?'<div class="from" style="color:var(--warn)">⚠ Dieses Material lässt sich mit dieser Absicht nicht bearbeiten.</div>':`
+      <div class="summary"><div><b id="vS">${v.speed}</b><span>mm/min</span></div><div><b id="vP">${v.power} %</b><span>Leistung</span></div><div><b id="vN">${L.id==="img"?v.dpi:v.passes}</b><span>${L.id==="img"?"dpi":"Durchg."}</span></div></div>
+      <details><summary>Einstellungen anpassen</summary>
+        <div class="sl"><span>Tempo</span><input id="s1" data-k="speed" type="range" min="100" max="6000" step="10" value="${v.speed}"><output>${v.speed}</output></div>
+        <div class="sl"><span>Leistung</span><input id="s2" data-k="power" type="range" min="0" max="100" value="${v.power}"><output>${v.power} %</output></div>
+        <div class="sl"><span>Durchgänge</span><input id="s3" data-k="passes" type="range" min="1" max="10" value="${v.passes}"><output>${v.passes}</output></div>
+        ${L.id!=="cut"&&L.id!=="mark"?`<div class="sl"><span>${L.id==="img"?"Verfahren":"Zeilen"}</span><span style="grid-column:span 2;font-size:12px">${L.id==="img"?"Floyd-Steinberg ⌄":"0,1 mm · 0° · bidirektional"}</span></div>`:""}
+        <div class="tog" style="margin-top:10px"><span>Luftunterstützung empfohlen</span><button class="sw2" role="switch" aria-checked="true" aria-label="Luftunterstützung empfohlen"></button></div>
+        <p class="hint" style="margin-top:8px">Geänderte Werte gelten nur für dieses Projekt, bis du sie als Material speicherst.</p>
+      </details>`}</div>
+      <div class="card"><h4>Reihenfolge</h4>
+        <div class="tog"><span>Innen vor außen schneiden</span><button class="sw2" role="switch" aria-checked="true" aria-label="Innen vor außen"></button></div>
+        <div class="tog"><span>Gravieren vor Schneiden</span><button class="sw2" role="switch" aria-checked="true" aria-label="Gravieren zuerst"></button></div>
+        <div class="tog"><span>Nach Nähe sortieren</span><button class="sw2" role="switch" aria-checked="false" aria-label="Nach Nähe"></button></div></div>`;
+  } else {
+    h=`<div class="devcard"><span class="name">${mc.n}</span><span class="sub">${mc.mod}</span><span class="sub">${mc.ctl} · ${mc.area} · ${jobRun?"läuft":"bereit"}</span></div>
+      <div class="card"><h4>Bewegen</h4><div class="jogrow"><div class="jog">
+        <span></span><button aria-label="Nach oben">▲</button><span></span>
+        <button aria-label="Nach links">◀</button><button class="home" aria-label="Home">⌂</button><button aria-label="Nach rechts">▶</button>
+        <span></span><button aria-label="Nach unten">▼</button><span></span></div>
+        <div class="zjog"><button>Puls</button><button>Fokus …</button></div></div>
+        <div class="steps">${[0.1,1,10,50].map(s=>`<button data-s="${s}" aria-pressed="${s===step}">${String(s).replace(".",",")}</button>`).join("")}</div>
+        <span class="hint">Pfeiltasten bewegen, ⇧ für große Schritte</span></div>
+      <div class="card"><h4>Jobursprung</h4><div class="origin"><div class="anchor">${[...Array(9)].map((_,i)=>`<button data-o="${i}" aria-pressed="${i===anchor}" aria-label="Anker ${i+1}"></button>`).join("")}</div>
+        <label class="lbl">Bezug<select id="orig"><option>Aktuelle Position</option><option>Benutzerursprung</option><option>Absolut</option></select></label></div></div>
+      <div class="card"><h4>Auftrag</h4><div class="prog"><div id="bar" style="width:${jobP}%"></div></div>
+        <div class="progtxt"><span id="ptxt">${jobP?Math.round(jobP)+" %":"Noch nicht gestartet"}</span><span>${jobP?"Ebene Schnitt · Durchgang 1/2":est()+" geschätzt"}</span></div></div>`;
+  }
+  $("#insp").innerHTML=h;
+  bindStatus();
+  document.querySelectorAll(".chip").forEach(b=>b.onclick=()=>document.querySelectorAll(".chip").forEach(x=>x.setAttribute("aria-pressed",x===b)));
+  document.querySelectorAll(".sl input[type=range]").forEach(r=>r.oninput=()=>{
+    const k=r.dataset.k, val=+r.value; ov[sel]=Object.assign({},ov[sel],{[k]:val});
+    r.nextElementSibling.textContent=k==="power"?val+" %":val;
+    const v=resolve(sel); $("#vS").textContent=v.speed; $("#vP").textContent=v.power+" %"; if(sel!=="img")$("#vN").textContent=v.passes;
+    meta();});
+  document.querySelectorAll(".sw2").forEach(s=>s.onclick=()=>s.setAttribute("aria-checked",s.getAttribute("aria-checked")!=="true"));
+  document.querySelectorAll(".steps button").forEach(b=>b.onclick=()=>{step=+b.dataset.s;insp();});
+  document.querySelectorAll(".anchor button").forEach(b=>b.onclick=()=>{anchor=+b.dataset.o;insp();});
+}
+
+function acts(){
+  const a=$("#mainActs");
+  if(phase<3){a.innerHTML=`<button class="btn primary" id="goLaser">▶ Lasern</button>`;$("#goLaser").onclick=()=>setPhase(3);}
+  else if(jobRun){a.innerHTML=`<button class="btn" id="pause">❚❚ Pause</button><button class="btn danger" id="stop">■ Stopp</button>`;
+    $("#pause").onclick=()=>{clearInterval(timer);jobRun=false;$("#state").textContent="Pausiert";acts();insp();};
+    $("#stop").onclick=()=>{clearInterval(timer);jobRun=false;jobP=0;$("#state").textContent="Abgebrochen · Laser aus";render();};}
+  else {a.innerHTML=`<button class="btn" id="frame">⬚ Rahmen</button><button class="btn primary" id="start">${jobP>0&&jobP<100?"▶ Fortsetzen":"▶ Lasern"}</button>`;
+    $("#frame").onclick=()=>{framed=true;$("#state").textContent="Rahmen gefahren";bed();};
+    $("#start").onclick=()=>{jobP>0&&jobP<100?run():preflight();};}
+}
+
+function preflight(){
+  const openWarn=LAYERS[0].warn, t=T(), s=status();
+  $("#sheet").innerHTML=`<h3>Bereit zum Lasern?</h3>
+   <div class="check"><span class="st ok">✓</span><span>Alle Objekte liegen innerhalb der Arbeitsfläche<small>Rahmen 282 × 250 mm · Fläche ${M().area}</small></span></div>
+   <div class="check"><span class="st ${s==="der"?"wn":"ok"}">${s==="der"?"!":"✓"}</span><span>${M().n} → ${t.n} ${t.d}<small>${s==="ok"?"Auf dieser Maschine getestet":s==="mod"?"Mit Projekt-Änderungen":"Nur abgeleitet, noch nicht getestet"} · geschätzt ${est()}</small></span></div>
+   ${openWarn?`<div class="check"><span class="st wn">!</span><span>Offene Kontur auf Ebene Schnitt<small>„Ritzlinie“ wird nicht ausgeschnitten.</small></span><button class="btn small" id="pfFix">Als Markieren</button></div>`:""}
+   <div class="check"><input type="checkbox" id="c1"><label for="c1">Fokus eingestellt<small>Laserkopf bis zur Fokusplatte absenken (fester Fokus 40 mm), Material ${t.d}</small></label></div>
+   <div class="check"><input type="checkbox" id="c2"><label for="c2">Luftpumpe eingeschaltet<small>Wird an der Pumpe geschaltet, nicht von MacBurn</small></label></div>
+   <div class="check"><input type="checkbox" id="c3"><label for="c3">Schutzbrille / Gehäuse geschlossen</label></div>
+   <div class="acts"><button class="btn" id="pfCancel">Abbrechen</button><button class="btn primary" id="pfGo" disabled>Starten</button></div>`;
+  $("#scrim").hidden=false;
+  const upd=()=>{$("#pfGo").disabled=!["#c1","#c2","#c3"].every(s=>$(s).checked)};
+  ["#c1","#c2","#c3"].forEach(s=>$(s).onchange=upd);
+  if(openWarn)$("#pfFix").onclick=()=>{LAYERS[0].warn=false;preflight();};
+  $("#pfCancel").onclick=()=>$("#scrim").hidden=true;
+  $("#pfGo").onclick=()=>{$("#scrim").hidden=true;jobP=0;run();};
+}
+
+function run(){
+  jobRun=true;$("#state").textContent="Lasert …";acts();insp();
+  clearInterval(timer);
+  timer=setInterval(()=>{jobP=Math.min(100,jobP+0.6);
+    if(jobP>=100){clearInterval(timer);jobRun=false;$("#state").textContent=`Fertig in ${est()} · Mitteilung gesendet`;render();return;}
+    bed();const b=$("#bar");if(b)b.style.width=jobP+"%";const t=$("#ptxt");if(t)t.textContent=Math.round(jobP)+" %";},120);
+}
+
+/* Popover: Maschine, Material, Bibliothek */
+function closePop(){$("#matPop").hidden=true;$("#macCard").setAttribute("aria-expanded","false");$("#matCard").setAttribute("aria-expanded","false");}
+function openPop(kind){
+  const p=$("#matPop"), card=kind==="mat"?$("#matCard"):$("#macCard");
+  if(!p.hidden&&p.dataset.kind===kind){closePop();return;}
+  closePop(); p.dataset.kind=kind; card.setAttribute("aria-expanded","true");
+  p.style.top=(card.offsetTop+card.offsetHeight+4)+"px";
+  let h="";
+  if(kind==="mac"){
+    h=`<div class="grp">Meine Maschinen</div>`+MACHINES.map((m,i)=>`<button class="it" data-mac="${i}" aria-selected="${i===mac}"><span>${m.n}</span><small>${m.mod}</small></button>`).join("");
+    h+=`<div class="foot"><button class="it" style="color:var(--accent)" id="toLib"><span>＋ Maschine aus Bibliothek …</span><small>${LIB.reduce((a,b)=>a+b.m.length,0)} Modelle</small></button><button class="it" id="manual"><span>Eigene Maschine anlegen …</span><small>aus $$ lesen</small></button></div>`;
+  } else if(kind==="lib"){
+    h=`<input id="libQ" placeholder="Hersteller oder Modell suchen" aria-label="Maschine suchen">`;
+    LIB.forEach(b=>{h+=`<div class="grp">${b.b}</div>`+b.m.map(([n,w,a])=>`<button class="it" data-lib="${b.b}|${n}|${w}|${a}"><span>${n}</span><small>${w} W · ${a}</small></button>`).join("")});
+    h+=`<div class="foot"><span class="hint" style="padding:4px 8px;display:block">Vorlagen enthalten Arbeitsfläche, Controller, Lasermodul und Grenzwerte. Beim Verbinden gleicht MacBurn sie mit $$ ab.</span></div>`;
+  } else {
+    h=`<input id="matQ" placeholder="Material suchen" aria-label="Material suchen">`;
+    const rows=MATS.map((m,i)=>({m,i,t:m.tested.includes(M().id)}));
+    [["Getestet auf "+M().n,true],["Abgeleitet · Test empfohlen",false]].forEach(([title,flag])=>{
+      const list=rows.filter(r=>r.t===flag); if(!list.length)return;
+      h+=`<div class="grp">${title}</div>`+list.map(({m,i})=>`<button class="it" data-m="${i}" aria-selected="${i===mat}"><span><span class="stc ${flag?"st-ok":"st-der"}">${flag?"✓":"≈"}</span>${m.n}</span><small>${m.d}</small></button>`).join("");});
+    h+=`<div class="foot"><button class="it" style="color:var(--accent)" id="newMat"><span>＋ Neues Material testen …</span><small>Assistent</small></button></div>`;
+  }
+  p.innerHTML=h;p.hidden=false;
+  p.querySelectorAll("[data-mac]").forEach(b=>b.onclick=()=>{mac=+b.dataset.mac;closePop();render();});
+  p.querySelectorAll("[data-m]").forEach(b=>b.onclick=()=>{mat=+b.dataset.m;ov={};closePop();render();});
+  p.querySelectorAll("[data-lib]").forEach(b=>b.onclick=()=>{const [br,n,w,a]=b.dataset.lib.split("|");
+    MACHINES.push({id:"u"+MACHINES.length,n:`${br} ${n}`,w:+w,mod:`Diode ${w} W · 455 nm`,area:a,ctl:"GRBL 1.1 · USB"});mac=MACHINES.length-1;closePop();render();});
+  const lb=$("#toLib"); if(lb) lb.onclick=e=>{e.stopPropagation();p.hidden=true;p.dataset.kind="";openPop("lib");$("#macCard").setAttribute("aria-expanded","true");};
+  const q=$("#matQ")||$("#libQ"); if(q){q.oninput=e=>{const s=e.target.value.toLowerCase();p.querySelectorAll("[data-m],[data-lib]").forEach(b=>b.hidden=!(b.textContent+(b.dataset.lib||"")).toLowerCase().includes(s));};q.focus();}
+}
+
+function setPhase(n){phase=n;if(n!==3)framed=false;
+  [1,2,3].forEach(i=>{$("#p"+i).setAttribute("aria-pressed",i===n);$("#e"+i).classList.toggle("on",i===n)});
+  if(n===1)sel="eng";render();}
+function render(){meta();bed();insp();acts();}
+
+document.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>setPhase(+b.dataset.phase));
+[["#matCard","mat"],["#macCard","mac"]].forEach(([id,k])=>{const c=$(id);c.onclick=()=>openPop(k);c.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openPop(k);}};});
+document.querySelectorAll(".palette button").forEach(b=>b.onclick=()=>document.querySelectorAll(".palette button").forEach(x=>x.setAttribute("aria-pressed",x===b)));
+const cmd=()=>{const c=$("#cmd");c.hidden=!c.hidden;if(!c.hidden)$("#cmdIn").focus();};
+$("#cmdBtn").onclick=cmd;
+document.addEventListener("keydown",e=>{
+  if((e.metaKey||e.ctrlKey)&&["1","2","3"].includes(e.key)){e.preventDefault();setPhase(+e.key);}
+  else if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==="k"){e.preventDefault();cmd();}
+  else if(e.key==="Escape"){$("#cmd").hidden=true;closePop();$("#scrim").hidden=true;}
+});
+document.addEventListener("click",e=>{
+  if(!$("#matPop").hidden&&!e.target.closest("#matPop,#matCard,#macCard"))closePop();
+  if(!$("#cmd").hidden&&!e.target.closest("#cmd,#cmdBtn"))$("#cmd").hidden=true;
+});
+render();
+})();
+</script>
