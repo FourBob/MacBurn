@@ -438,6 +438,89 @@ TEST(controller_preflight_without_device) {
     CHECK(g.find("G1 X100.000 Y50.000 F3000 S0") != std::string::npos);
 }
 
+// ---------- Formen bearbeiten ----------
+
+static Rect selRect(AppController& c) {
+    for (auto& f : c.inspector()) if (f.key == "selX") {
+        Rect r; for (auto& g : c.inspector()) {
+            if (g.key == "selX") r.x = g.value; if (g.key == "selY") r.y = g.value;
+            if (g.key == "selW") r.w = g.value; if (g.key == "selH") r.h = g.value;
+        }
+        return r;
+    }
+    return {};
+}
+
+TEST(edit_hit_test_and_drag_with_undo) {
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    // Beispiel: Untersetzer (Kreis um 80/80, r 50) ist Objekt 1
+    c.pointerDown({130, 80}, 1.0, false);   // auf der Kontur
+    CHECK(c.hasSelection());
+    Rect r = selRect(c);
+    NEAR(r.w, 100);
+    c.pointerDrag({140, 90});
+    c.pointerUp();
+    r = selRect(c);
+    CHECK(std::abs(r.x - 40) < 0.01);   // 30 + 10
+    CHECK(c.undoTitle().find("Verschieben") != std::string::npos);
+    c.undo();
+    c.pointerDown({80, 80}, 1.0, false);     // innen in der Fläche
+    CHECK(std::abs(selRect(c).x - 30) < 0.01);
+    c.pointerDown({300, 300}, 1.0, false);   // daneben: Auswahl weg
+    CHECK(!c.hasSelection());
+}
+
+TEST(edit_numbers_rotate_flip_duplicate_delete) {
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    c.pointerDown({150, 80}, 1.0, false);   // Anhänger 40 × 80 bei 150/40
+    Rect r = selRect(c);
+    NEAR(r.x, 150); NEAR(r.w, 40); NEAR(r.h, 80);
+    c.setNumber("selW", 20);                // proportional
+    r = selRect(c);
+    CHECK(std::abs(r.w - 20) < 0.01 && std::abs(r.h - 40) < 0.01);
+    NEAR(r.x, 150); NEAR(r.y, 40);          // unten links bleibt
+    c.setNumber("selX", 200);
+    NEAR(selRect(c).x, 200);
+    c.rotateSelection(-90);
+    r = selRect(c);
+    CHECK(std::abs(r.w - 40) < 0.01 && std::abs(r.h - 20) < 0.01);
+    c.nudge(0, 10);
+    double y = selRect(c).y;
+    c.flipSelection(false);
+    CHECK(std::abs(selRect(c).y - y) < 0.01);   // Spiegeln bleibt an Ort und Stelle
+    size_t before = c.layerRows().size();
+    c.duplicateSelection();
+    CHECK(c.hasSelection());
+    CHECK(c.layerRows().size() == before);      // Kopie liegt auf denselben Ebenen
+    c.centerSelection();
+    r = selRect(c);
+    CHECK(std::abs(r.x + r.w / 2 - 205) < 0.01);   // Fläche 410 × 410
+    c.deleteSelection();
+    CHECK(!c.hasSelection());
+    c.selectAll();
+    CHECK(c.hasSelection());
+}
+
+TEST(rotate_keeps_object_on_bed) {
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    c.importFile(std::string(MB_SOURCE_DIR) + "/examples/schild.svg");   // liegt unten links
+    c.rotateSelection(-90);
+    Rect r = selRect(c);
+    CHECK(r.y >= -1e-6);
+    CHECK(r.x >= -1e-6);
+    CHECK(std::abs(r.h - 119) < 0.1);
+}
+
+TEST(import_is_one_selected_object) {
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    c.importFile(std::string(MB_SOURCE_DIR) + "/examples/schild.svg");
+    CHECK(c.hasSelection());
+    Rect r = selRect(c);
+    CHECK(std::abs(r.w - 119) < 0.1);       // ganze Außenkontur
+    c.nudge(100, 100);
+    CHECK(std::abs(selRect(c).x - 100.5) < 0.1);
+}
+
 int main() {
     for (auto& [name, fn] : tests) {
         int before = failures;

@@ -25,6 +25,7 @@ struct RenderList {
     std::vector<Stroke> strokes;
     std::optional<Vec2> head;       // Laserkopf (nur verbunden)
     std::optional<Rect> jobFrame;   // Umriss des Auftrags auf der Maschine
+    std::optional<Rect> selection;  // Rahmen um die Auswahl
 };
 
 // Gestalten: Ebenenfarben. Vorbereiten: Brennfarbe + Leerfahrten. Lasern: Brennfarbe.

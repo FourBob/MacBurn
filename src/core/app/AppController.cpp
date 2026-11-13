@@ -146,6 +146,7 @@ void AppController::setChoice(const std::string& key, int index) {
 }
 
 void AppController::setNumber(const std::string& key, double v) {
+    if (key.rfind("sel", 0) == 0) { setSelectionNumber(key, v); return; }
     editLayer("Einstellung ändern", [&](Layer& l) {
         if (key == "speed") l.overrides.speed = v;
         else if (key == "power") l.overrides.power = v;
@@ -155,10 +156,17 @@ void AppController::setNumber(const std::string& key, double v) {
 }
 
 void AppController::setToggle(const std::string& key, bool on) {
+    if (key == "lockRatio") { lockRatio_ = on; changed(); return; }
     if (key == "output") editLayer(on ? "Ebene ausgeben" : "Ebene nicht ausgeben", [on](Layer& l) { l.output = on; });
 }
 
 void AppController::pressButton(const std::string& key) {
+    if (key == "rot90") { rotateSelection(-90); return; }
+    if (key == "flipH") { flipSelection(true); return; }
+    if (key == "flipV") { flipSelection(false); return; }
+    if (key == "center") { centerSelection(); return; }
+    if (key == "duplicate") { duplicateSelection(); return; }
+    if (key == "delete") { deleteSelection(); return; }
     if (key == "connect") { connect(); return; }
     if (key == "disconnect") { disconnect(); return; }
     if (key == "refreshPorts") { refreshPorts(); changed(); return; }
@@ -184,6 +192,7 @@ void AppController::newDocument() {
     Document before = doc_, after;
     undo_.perform(doc_, {"Neues Projekt", [after](Document& d) { d = after; }, [before](Document& d) { d = before; }});
     isSample_ = false;
+    selection_.clear();
     title_ = "Unbenannt";
     layer_ = 0;
     message_.clear();
@@ -209,11 +218,13 @@ AppController::ImportResult AppController::importFile(const std::string& path) {
         else { map[i] = after.layers.size(); after.layers.push_back(r.layers[i]); }
     }
     size_t firstNew = after.shapes.size();
-    for (auto& s : r.shapes) { s.layer = map[s.layer]; after.shapes.push_back(std::move(s)); }
+    uint32_t object = after.nextObjectId();   // ein importiertes SVG ist ein Objekt
+    for (auto& s : r.shapes) { s.layer = map[s.layer]; s.object = object; after.shapes.push_back(std::move(s)); }
 
     std::string name = path.substr(path.find_last_of('/') + 1);
     undo_.perform(doc_, {"Import " + name, [after](Document& d) { d = after; }, [before](Document& d) { d = before; }});
     if (isSample_) { title_ = name.substr(0, name.size() - 4); isSample_ = false; layer_ = 0; }
+    selection_ = {object};   // das Importierte ist gleich ausgewählt
 
     size_t count = after.shapes.size() - firstNew;
     message_ = name + ": " + std::to_string(count) + (count == 1 ? " Form" : " Formen") + " in "
@@ -223,8 +234,8 @@ AppController::ImportResult AppController::importFile(const std::string& path) {
     return {true, message_};
 }
 
-void AppController::undo() { undo_.undo(doc_); changed(); }
-void AppController::redo() { undo_.redo(doc_); changed(); }
+void AppController::undo() { undo_.undo(doc_); selection_.clear(); changed(); }
+void AppController::redo() { undo_.redo(doc_); selection_.clear(); changed(); }
 
 std::string AppController::exportGcode() const {
     GcodeOptions o;
@@ -310,6 +321,7 @@ std::vector<Field> AppController::inspector() const {
         return f;
     }
 
+    addSelectionFields(f);
     if (layer_ < 0 || layer_ >= int(doc_.layers.size())) return f;
     const Layer& l = doc_.layers[size_t(layer_)];
     f.push_back({Field::Kind::Header, "", "Ebene " + l.name});
@@ -414,6 +426,7 @@ std::string AppController::redoTitle() const { return canRedo() ? "Wiederholen: 
 
 RenderList AppController::renderList() const {
     RenderList rl = buildRenderList(doc_, job_, phase_, workArea());
+    if (!selection_.empty() && phase_ != Phase::Laser) rl.selection = doc_.bounds(selection_);
     if (phase_ == Phase::Laser) {
         if (dev_.connected) rl.head = workPos();
         if (auto off = offsetFor()) {

@@ -7,7 +7,9 @@
 
 #include <cstdint>
 #include <functional>
+#include <set>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -28,13 +30,23 @@ struct Shape {
     std::string name;
     size_t layer = 0;
     Polyline path;
+    uint32_t object = 0;   // zusammengehörige Formen (z. B. ein importiertes SVG) bewegen sich gemeinsam
 };
+
+using ObjectSet = std::set<uint32_t>;
 
 struct Document {
     std::vector<Layer> layers;
     std::vector<Shape> shapes;
 
     Rect bounds() const;
+    Rect bounds(const ObjectSet& objects) const;
+    uint32_t nextObjectId() const;
+    ObjectSet allObjects() const;
+    // Oberstes Objekt an einem Punkt (mm); tolerance für Linien und Konturen
+    std::optional<uint32_t> hitTest(Vec2 p, double tolerance) const;
+    // Alle Punkte der Objekte durch fn schicken
+    void transform(const ObjectSet& objects, const std::function<Vec2(Vec2)>& fn);
     static Document sample();   // Beispielprojekt für den ersten Start
 };
 
@@ -47,6 +59,7 @@ public:
     };
 
     void perform(Document& doc, Step step);
+    void record(Step step);   // Änderung ist schon angewendet (z. B. nach dem Ziehen mit der Maus)
     bool canUndo() const { return pos_ > 0; }
     bool canRedo() const { return pos_ < steps_.size(); }
     std::string undoLabel() const { return canUndo() ? steps_[pos_ - 1].label : std::string(); }

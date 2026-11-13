@@ -63,6 +63,17 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
     [edit addItem:item(@"Kopieren", @selector(copy:), @"c")];
     [edit addItem:item(@"Einsetzen", @selector(paste:), @"v")];
     [edit addItem:item(@"Alles auswählen", @selector(selectAll:), @"a")];
+    [edit addItem:item(@"Auswahl aufheben", @selector(deselectAllCore:), @"a", NSEventModifierFlagCommand | NSEventModifierFlagShift)];
+    [edit addItem:NSMenuItem.separatorItem];
+    [edit addItem:item(@"Duplizieren", @selector(duplicateCore:), @"d")];
+    [edit addItem:item(@"Löschen", @selector(deleteCore:), @"")];
+
+    NSMenu* object = [[NSMenu alloc] initWithTitle:@"Objekt"];
+    [object addItem:item(@"Um 90° drehen", @selector(rotateCore:), @"")];
+    [object addItem:item(@"Horizontal spiegeln", @selector(flipHCore:), @"")];
+    [object addItem:item(@"Vertikal spiegeln", @selector(flipVCore:), @"")];
+    [object addItem:NSMenuItem.separatorItem];
+    [object addItem:item(@"Auf der Fläche zentrieren", @selector(centerCore:), @"")];
 
     NSMenu* view = [[NSMenu alloc] initWithTitle:@"Darstellung"];
     NSArray* phases = @[@"Gestalten", @"Vorbereiten", @"Lasern"];
@@ -101,7 +112,7 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
     [window addItem:item(@"Im Dock ablegen", @selector(performMiniaturize:), @"m")];
     NSApp.windowsMenu = window;
 
-    for (NSMenu* m in @[app, file, edit, view, laser, window]) {
+    for (NSMenu* m in @[app, file, edit, object, view, laser, window]) {
         NSMenuItem* top = [[NSMenuItem alloc] initWithTitle:m.title action:nil keyEquivalent:@""];
         top.submenu = m;
         [bar addItem:top];
@@ -112,6 +123,11 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
 - (BOOL)validateMenuItem:(NSMenuItem*)mi {
     if (mi.action == @selector(undoCore:)) { mi.title = NS(_core->undoTitle()); return _core->canUndo(); }
     if (mi.action == @selector(redoCore:)) { mi.title = NS(_core->redoTitle()); return _core->canRedo(); }
+    if (mi.action == @selector(duplicateCore:) || mi.action == @selector(deleteCore:) || mi.action == @selector(deselectAllCore:) ||
+        mi.action == @selector(rotateCore:) || mi.action == @selector(flipHCore:) || mi.action == @selector(flipVCore:) ||
+        mi.action == @selector(centerCore:))
+        return _core->hasSelection() && _core->canEdit();
+    if (mi.action == @selector(selectAll:)) return _core->canEdit();
     if (mi.action == @selector(laserConnect:)) return !_core->deviceConnected();
     if (mi.action == @selector(laserDisconnect:)) return _core->deviceConnected() && !_core->jobRunning();
     if (mi.action == @selector(laserHome:) || mi.action == @selector(laserFrame:)) return _core->deviceConnected() && !_core->jobRunning();
@@ -127,6 +143,15 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
 - (void)showPhase:(NSMenuItem*)sender { _core->setPhase(mb::Phase(sender.tag)); }
 
 - (void)newDocumentCore:(id)sender { _core->newDocument(); }
+
+- (void)selectAll:(id)sender { _core->selectAll(); }
+- (void)deselectAllCore:(id)sender { _core->clearSelection(); }
+- (void)duplicateCore:(id)sender { _core->duplicateSelection(); }
+- (void)deleteCore:(id)sender { _core->deleteSelection(); }
+- (void)rotateCore:(id)sender { _core->rotateSelection(-90); }
+- (void)flipHCore:(id)sender { _core->flipSelection(true); }
+- (void)flipVCore:(id)sender { _core->flipSelection(false); }
+- (void)centerCore:(id)sender { _core->centerSelection(); }
 
 - (void)laserConnect:(id)sender { _core->setPhase(mb::Phase::Laser); _core->connect(); }
 - (void)laserDisconnect:(id)sender { _core->disconnect(); }

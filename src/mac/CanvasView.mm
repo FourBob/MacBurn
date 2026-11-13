@@ -81,6 +81,23 @@
         CGPathRelease(p);
     }
 
+    // Auswahl
+    if (_list.selection) {
+        const auto& s = *_list.selection;
+        CGRect r = CGRectInset(CGRectApplyAffineTransform(CGRectMake(s.x, s.y, s.w, s.h), t), -4, -4);
+        CGContextSetStrokeColorWithColor(ctx, NSColor.controlAccentColor.CGColor);
+        CGContextSetLineWidth(ctx, 1);
+        CGContextStrokeRect(ctx, r);
+        CGContextSetFillColorWithColor(ctx, NSColor.controlAccentColor.CGColor);
+        for (CGPoint p : {CGPointMake(CGRectGetMinX(r), CGRectGetMinY(r)), CGPointMake(CGRectGetMaxX(r), CGRectGetMinY(r)),
+                          CGPointMake(CGRectGetMinX(r), CGRectGetMaxY(r)), CGPointMake(CGRectGetMaxX(r), CGRectGetMaxY(r))})
+            CGContextFillRect(ctx, CGRectMake(p.x - 3, p.y - 3, 6, 6));
+        NSString* size = [NSString stringWithFormat:@"%.1f × %.1f mm", s.w, s.h];
+        [size drawAtPoint:NSMakePoint(CGRectGetMinX(r), CGRectGetMaxY(r) + 4)
+           withAttributes:@{NSFontAttributeName: [NSFont monospacedDigitSystemFontOfSize:10 weight:NSFontWeightMedium],
+                            NSForegroundColorAttributeName: NSColor.controlAccentColor}];
+    }
+
     // Umriss des Auftrags auf der Maschine
     if (_list.jobFrame) {
         const auto& f = *_list.jobFrame;
@@ -108,15 +125,31 @@
 
 - (void)keyDown:(NSEvent*)e {
     if (!self.onKey) { [super keyDown:e]; return; }
+    BOOL shift = (e.modifierFlags & NSEventModifierFlagShift) != 0;
     switch (e.keyCode) {
-        case 123: self.onKey(-1, 0, NO); return;   // ←
-        case 124: self.onKey(1, 0, NO); return;    // →
-        case 125: self.onKey(0, -1, NO); return;   // ↓
-        case 126: self.onKey(0, 1, NO); return;    // ↑
-        case 53: self.onKey(0, 0, YES); return;    // Esc
+        case 123: self.onKey(-1, 0, shift, NO, NO); return;   // ←
+        case 124: self.onKey(1, 0, shift, NO, NO); return;    // →
+        case 125: self.onKey(0, -1, shift, NO, NO); return;   // ↓
+        case 126: self.onKey(0, 1, shift, NO, NO); return;    // ↑
+        case 53: self.onKey(0, 0, NO, YES, NO); return;       // Esc
+        case 51: case 117: self.onKey(0, 0, NO, NO, YES); return;   // ⌫ und ⌦
         default: [super keyDown:e];
     }
 }
+
+// ---------- Maus: Punkte in mm an den Kern ----------
+
+- (void)pointer:(int)phase event:(NSEvent*)e {
+    if (!self.onPointer) return;
+    NSPoint v = [self convertPoint:e.locationInWindow fromView:nil];
+    CGAffineTransform t = [self transform];
+    CGPoint mm = CGPointApplyAffineTransform(v, CGAffineTransformInvert(t));
+    double tol = 6.0 / std::max(0.0001, double(t.a));   // 6 Punkte auf dem Bildschirm
+    self.onPointer(phase, mm.x, mm.y, tol, (e.modifierFlags & NSEventModifierFlagShift) != 0);
+}
+- (void)mouseDown:(NSEvent*)e { [self.window makeFirstResponder:self]; [self pointer:0 event:e]; }
+- (void)mouseDragged:(NSEvent*)e { [self pointer:1 event:e]; }
+- (void)mouseUp:(NSEvent*)e { [self pointer:2 event:e]; }
 
 // Drag & Drop aus dem Finder
 - (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)info {

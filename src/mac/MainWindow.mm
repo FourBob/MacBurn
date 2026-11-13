@@ -119,9 +119,23 @@ static NSTextField* small(NSString* s, BOOL secondary) {
     __weak MainWindow* weakSelf = self;
     _canvas.onDropFile = ^(NSString* path) { [weakSelf importPath:path]; };
     mb::AppController* core = _core;
-    _canvas.onKey = ^(int dx, int dy, BOOL escape) {
-        if (escape) core->stop();
-        else if (core->phase() == mb::Phase::Laser) core->jog(dx, dy);
+    _canvas.onKey = ^(int dx, int dy, BOOL shift, BOOL escape, BOOL del) {
+        if (escape) {
+            if (core->jobRunning()) core->stop();
+            else core->clearSelection();
+        } else if (del) {
+            core->deleteSelection();
+        } else if (core->phase() == mb::Phase::Laser && core->deviceConnected()) {
+            core->jog(dx, dy);
+        } else {
+            double step = shift ? 10 : 1;
+            core->nudge(dx * step, dy * step);
+        }
+    };
+    _canvas.onPointer = ^(int phase, double x, double y, double tol, BOOL shift) {
+        if (phase == 0) core->pointerDown({x, y}, tol, shift);
+        else if (phase == 1) core->pointerDrag({x, y});
+        else core->pointerUp();
     };
     _inspector = [[InspectorView alloc] initWithCore:_core];
     NSScrollView* inspScroll = [[NSScrollView alloc] init];
@@ -212,7 +226,7 @@ static NSTextField* small(NSString* s, BOOL secondary) {
     } else if ([ident isEqual:kPrimary]) {
         _primary = [NSButton buttonWithTitle:@"Weiter zum Lasern" target:self action:@selector(primaryPressed:)];
         _primary.bezelColor = NSColor.controlAccentColor;
-        _primary.keyEquivalent = @"\r";
+        // Keine Eingabetaste: ↩ bestätigt Werte im Inspektor und darf nicht zum Lasern springen.
         it.view = _primary;
         it.label = @"Lasern";
     }

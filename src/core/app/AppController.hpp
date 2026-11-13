@@ -89,6 +89,22 @@ public:
     ImportResult importFile(const std::string& path);
     std::string documentTitle() const { return title_; }
 
+    // --- Formen bearbeiten ---
+    // Maus: Punkte in mm; tolerance in mm (aus der aktuellen Zoomstufe)
+    void pointerDown(Vec2 p, double tolerance, bool extend);
+    void pointerDrag(Vec2 p);
+    void pointerUp();
+    void nudge(double dx, double dy);   // Pfeiltasten im Gestalten/Vorbereiten
+    void selectAll();
+    void clearSelection();
+    void deleteSelection();
+    void duplicateSelection();
+    void rotateSelection(double degrees);
+    void flipSelection(bool horizontal);
+    void centerSelection();
+    bool hasSelection() const { return !selection_.empty(); }
+    bool canEdit() const { return !dev_.jobRunning; }
+
     // --- Gerät ---
     PrimaryAction primaryAction() const;
     void connect();
@@ -149,6 +165,11 @@ private:
     int port_ = 0, jogStep_ = 1, origin_ = 0, anchor_ = 4;   // Anker: Mitte
     Vec2 jobOffset_;
 
+    ObjectSet selection_;
+    bool lockRatio_ = true;
+    struct Drag { Document before; Vec2 start; bool moved = false; };
+    std::optional<Drag> drag_;
+
     const MachineProfile* machine() const;
     std::vector<ProfileStore::MaterialChoice> choices() const;
     const MaterialProfile* material() const;
@@ -164,6 +185,9 @@ private:
     Rect outputBounds() const;            // nur ausgegebene Ebenen
     std::optional<Vec2> offsetFor() const; // Verschiebung je nach Jobursprung; nullopt = passt nicht
     void addDeviceFields(std::vector<Field>& f) const;
+    void addSelectionFields(std::vector<Field>& f) const;
+    void editDoc(const std::string& label, const std::function<void(Document&)>& fn);
+    void setSelectionNumber(const std::string& key, double v);
 
     std::unique_ptr<grbl::GrblDevice> device_;   // zuletzt: wird zuerst zerstört
 };
