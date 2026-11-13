@@ -61,6 +61,12 @@ public:
     void undo();
     void redo();
     std::string exportGcode() const;
+    void newDocument();
+    struct ImportResult { bool ok = false; std::string message; };
+    // SVG importieren: Farben werden zu Ebenen (gleiche Farbe = vorhandene Ebene).
+    // Ein unverändertes Beispielprojekt wird dabei ersetzt.
+    ImportResult importFile(const std::string& path);
+    std::string documentTitle() const { return title_; }
 
     // --- View-Modelle ---
     Phase phase() const { return phase_; }
@@ -89,6 +95,8 @@ private:
     int machine_ = 0, variant_ = 0, material_ = 0, layer_ = 0;
     Job job_;
     std::string message_;
+    std::string title_ = "Beispiel";
+    bool isSample_ = true;
     std::function<void()> onChange_;
 
     const MachineProfile* machine() const;

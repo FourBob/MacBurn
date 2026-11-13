@@ -6,4 +6,5 @@
 // Zeichenfläche, Inspektor, Statusleiste. Zeigt nur an, was der Kern liefert.
 @interface MainWindow : NSWindow <NSToolbarDelegate, NSTableViewDataSource, NSTableViewDelegate>
 - (instancetype)initWithCore:(mb::AppController*)core;
+- (void)importPath:(NSString*)path;
 @end

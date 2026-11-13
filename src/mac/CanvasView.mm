@@ -10,7 +10,10 @@
 }
 
 - (instancetype)initWithFrame:(NSRect)frame {
-    if ((self = [super initWithFrame:frame])) { _zoom = 1; _pan = NSZeroPoint; }
+    if ((self = [super initWithFrame:frame])) {
+        _zoom = 1; _pan = NSZeroPoint;
+        [self registerForDraggedTypes:@[NSPasteboardTypeFileURL]];
+    }
     return self;
 }
 
@@ -67,7 +70,10 @@
         for (size_t i = 1; i < s.points.size(); ++i) CGPathAddLineToPoint(p, &t, s.points[i].x, s.points[i].y);
         if (s.closed) CGPathCloseSubpath(p);
         CGContextAddPath(ctx, p);
-        CGContextSetStrokeColorWithColor(ctx, NSCol(s.color).CGColor);
+        NSColor* col = NSCol(s.color);
+        BOOL dark = [self.effectiveAppearance bestMatchFromAppearancesWithNames:@[NSAppearanceNameAqua, NSAppearanceNameDarkAqua]] == NSAppearanceNameDarkAqua;
+        if (dark && std::max({s.color.r, s.color.g, s.color.b}) < 0.25f) col = [NSColor.labelColor colorWithAlphaComponent:s.color.a];
+        CGContextSetStrokeColorWithColor(ctx, col.CGColor);
         CGContextSetLineWidth(ctx, s.width);
         CGFloat dash[] = {3, 3};
         CGContextSetLineDash(ctx, 0, s.dashed ? dash : nullptr, s.dashed ? 2 : 0);
@@ -79,6 +85,18 @@
     NSString* label = [NSString stringWithFormat:@"%.0f %%  ·  %.0f × %.0f mm", _zoom * 100, wa.w, wa.h];
     [label drawAtPoint:NSMakePoint(10, 8) withAttributes:@{NSFontAttributeName: [NSFont monospacedDigitSystemFontOfSize:11 weight:NSFontWeightRegular],
                                                           NSForegroundColorAttributeName: NSColor.secondaryLabelColor}];
+}
+
+// Drag & Drop aus dem Finder
+- (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)info {
+    return [info.draggingPasteboard canReadObjectForClasses:@[NSURL.class] options:@{NSPasteboardURLReadingFileURLsOnlyKey: @YES}]
+        ? NSDragOperationCopy : NSDragOperationNone;
+}
+- (BOOL)performDragOperation:(id<NSDraggingInfo>)info {
+    NSArray<NSURL*>* urls = [info.draggingPasteboard readObjectsForClasses:@[NSURL.class] options:@{NSPasteboardURLReadingFileURLsOnlyKey: @YES}];
+    if (!urls.count || !self.onDropFile) return NO;
+    for (NSURL* u in urls) self.onDropFile(u.path);
+    return YES;
 }
 
 // Trackpad: Zwei-Finger-Scroll verschiebt, Pinch zoomt.

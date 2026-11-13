@@ -6,4 +6,6 @@
 // Metal (über metal-cpp) ersetzt nur diese Datei.
 @interface CanvasView : NSView
 - (void)setRenderList:(const mb::RenderList&)list;
+// Wird aufgerufen, wenn eine Datei auf die Fläche gezogen wird.
+@property (nonatomic, copy) void (^onDropFile)(NSString* path);
 @end

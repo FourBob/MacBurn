@@ -26,6 +26,13 @@ open build/MacBurn.app
 ctest --test-dir build --output-on-failure
 ```
 
+## SVG importieren
+
+*Ablage › Importieren …* (⌘I), Datei auf die Fläche ziehen oder im Finder *Öffnen mit › MacBurn*.
+Jede Farbe wird zu einer Ebene. Gefüllte Flächen werden graviert, geschlossene Konturen geschnitten.
+Enthält eine Farbe offene Linien, wird sie nur markiert – MacBurn schneidet nie unbeabsichtigt.
+Texte bitte vorher in Pfade umwandeln. Beispiel: [examples/schild.svg](examples/schild.svg).
+
 ## Laser auslesen
 
 `mbprobe` sendet nur Abfragen (`?`, `$I`, `$$`), bewegt nichts und schaltet den Laser nicht ein.

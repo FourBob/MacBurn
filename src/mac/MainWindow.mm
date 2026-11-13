@@ -113,6 +113,8 @@ static NSTextField* small(NSString* s, BOOL secondary) {
 
     // Mitte und rechts
     _canvas = [[CanvasView alloc] initWithFrame:NSZeroRect];
+    __weak MainWindow* weakSelf = self;
+    _canvas.onDropFile = ^(NSString* path) { [weakSelf importPath:path]; };
     _inspector = [[InspectorView alloc] initWithCore:_core];
     NSScrollView* inspScroll = [[NSScrollView alloc] init];
     inspScroll.drawsBackground = NO;
@@ -224,6 +226,15 @@ static NSTextField* small(NSString* s, BOOL secondary) {
     if (row >= 0 && size_t(row) < _rows.size() && !_rows[size_t(row)].selected) _core->selectLayer(int(row));
 }
 
+- (void)importPath:(NSString*)path {
+    auto r = _core->importFile(STD(path));
+    if (r.ok) return;
+    NSAlert* a = [[NSAlert alloc] init];
+    a.messageText = [NSString stringWithFormat:@"„%@“ lässt sich nicht importieren", path.lastPathComponent];
+    a.informativeText = NS(r.message);
+    [a beginSheetModalForWindow:self completionHandler:nil];
+}
+
 // ---------- Anzeige ----------
 
 - (void)queueRefresh {
@@ -233,6 +244,7 @@ static NSTextField* small(NSString* s, BOOL secondary) {
 }
 
 - (void)refresh {
+    self.title = NS(_core->documentTitle());
     _phase.selectedSegment = NSInteger(_core->phase());
     _estimate.stringValue = [@"⏱ " stringByAppendingString:NS(_core->estimateText())];
     _primary.title = NS(_core->primaryActionTitle());

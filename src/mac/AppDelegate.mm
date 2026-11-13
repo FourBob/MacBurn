@@ -11,6 +11,7 @@
 @implementation AppDelegate {
     std::unique_ptr<mb::AppController> _core;
     MainWindow* _window;
+    NSMutableArray<NSString*>* _pending;   // Dateien, die vor dem Fenster ankommen
 }
 
 - (void)applicationDidFinishLaunching:(NSNotification*)note {
@@ -22,6 +23,8 @@
     [self buildMenu];
     _window = [[MainWindow alloc] initWithCore:_core.get()];
     [_window makeKeyAndOrderFront:nil];
+    for (NSString* p in _pending) [_window importPath:p];
+    _pending = nil;
     [NSApp activate];
 }
 
@@ -45,6 +48,9 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
     [app addItem:item(@"MacBurn beenden", @selector(terminate:), @"q")];
 
     NSMenu* file = [[NSMenu alloc] initWithTitle:@"Ablage"];
+    [file addItem:item(@"Neu", @selector(newDocumentCore:), @"n")];
+    [file addItem:item(@"Importieren …", @selector(importFile:), @"i")];
+    [file addItem:NSMenuItem.separatorItem];
     [file addItem:item(@"G-Code exportieren …", @selector(exportGcode:), @"e", NSEventModifierFlagCommand | NSEventModifierFlagShift)];
     [file addItem:NSMenuItem.separatorItem];
     [file addItem:item(@"Fenster schließen", @selector(performClose:), @"w")];
@@ -88,6 +94,26 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
 - (void)undoCore:(id)sender { _core->undo(); }
 - (void)redoCore:(id)sender { _core->redo(); }
 - (void)showPhase:(NSMenuItem*)sender { _core->setPhase(mb::Phase(sender.tag)); }
+
+- (void)newDocumentCore:(id)sender { _core->newDocument(); }
+
+- (void)importFile:(id)sender {
+    NSOpenPanel* panel = [NSOpenPanel openPanel];
+    UTType* svg = [UTType typeWithFilenameExtension:@"svg"];
+    if (svg) panel.allowedContentTypes = @[svg];
+    panel.allowsMultipleSelection = YES;
+    [panel beginSheetModalForWindow:_window completionHandler:^(NSModalResponse r) {
+        if (r != NSModalResponseOK) return;
+        for (NSURL* u in panel.URLs) [self->_window importPath:u.path];
+    }];
+}
+
+// Datei auf das Dock-Symbol oder per „Öffnen mit“
+- (BOOL)application:(NSApplication*)app openFile:(NSString*)path {
+    if (_window) [_window importPath:path];
+    else { if (!_pending) _pending = [NSMutableArray array]; [_pending addObject:path]; }
+    return YES;
+}
 
 - (void)exportGcode:(id)sender {
     NSSavePanel* panel = [NSSavePanel savePanel];

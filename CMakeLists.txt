@@ -25,6 +25,8 @@ add_library(macburn_core STATIC
   src/core/device/Grbl.cpp
   src/core/render/RenderList.cpp
   src/core/app/AppController.cpp
+  src/core/io/Xml.cpp
+  src/core/io/SvgImport.cpp
 )
 target_include_directories(macburn_core PUBLIC src/core)
 target_compile_options(macburn_core PRIVATE -Wall -Wextra -Wpedantic -Wno-missing-field-initializers)

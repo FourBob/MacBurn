@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "app/AppController.hpp"
 #include "device/Grbl.hpp"
+#include "io/SvgImport.hpp"
 #include "job/Job.hpp"
 #include "profiles/Profiles.hpp"
 #include "util/Json.hpp"
@@ -141,6 +142,109 @@ TEST(controller_undo_and_status) {
     c.setPhase(Phase::Prepare);
     CHECK(!c.renderList().strokes.empty());
     CHECK(c.exportGcode().find("G1") != std::string::npos);
+}
+
+// ---------- SVG-Import ----------
+
+static Rect boundsOf(const SvgImportResult& r, size_t layer) {
+    Polyline all;
+    for (auto& s : r.shapes) if (s.layer == layer) all.points.insert(all.points.end(), s.path.points.begin(), s.path.points.end());
+    return all.bounds();
+}
+
+TEST(svg_units_viewbox_and_flip) {
+    // 100 × 50 mm, viewBox in 1/10 mm
+    auto r = importSvg(R"svg(<svg xmlns="http://www.w3.org/2000/svg" width="100mm" height="50mm" viewBox="0 0 1000 500">
+        <rect x="100" y="100" width="200" height="100" fill="none" stroke="#f00"/></svg>)svg");
+    CHECK(r.ok);
+    NEAR(r.page.w, 100); NEAR(r.page.h, 50);
+    CHECK(r.layers.size() == 1);
+    CHECK(r.layers[0].intent == Intent::Cut);
+    CHECK(r.layers[0].colorKey == "#ff0000");
+    CHECK(r.layers[0].name == "Rot");
+    Rect b = boundsOf(r, 0);
+    NEAR(b.x, 10); NEAR(b.w, 20); NEAR(b.h, 10);
+    NEAR(b.y, 30);   // y gespiegelt: 50 - (10 + 10)
+}
+
+TEST(svg_px_default_96dpi) {
+    auto r = importSvg(R"svg(<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96"><line x1="0" y1="48" x2="96" y2="48" stroke="black"/></svg>)svg");
+    CHECK(r.ok);
+    NEAR(r.page.w, 25.4);
+    CHECK(r.layers[0].intent == Intent::Mark);   // offene Linie
+    CHECK(!r.shapes[0].path.closed);
+}
+
+TEST(svg_path_commands_relative_and_arc) {
+    auto r = importSvg(R"svg(<svg xmlns="http://www.w3.org/2000/svg" width="100mm" height="100mm" viewBox="0 0 100 100">
+        <path d="m10,10 h20 v20 h-20 z M50-0 l10.5.5-1e1 2Z" fill="none" stroke="blue"/>
+        <path d="M60 80 a10 10 0 1 0 20 0 a10 10 0 1 0-20 0z" fill="none" stroke="#00f"/></svg>)svg");
+    CHECK(r.ok);
+    CHECK(r.layers.size() == 1);   // blue und #00f sind dieselbe Farbe
+    CHECK(r.shapes.size() == 3);
+    Rect sq = r.shapes[0].path.bounds();
+    NEAR(sq.x, 10); NEAR(sq.w, 20); NEAR(sq.h, 20);
+    Rect circle = r.shapes[2].path.bounds();
+    CHECK(std::abs(circle.w - 20) < 0.05);
+    CHECK(std::abs(circle.h - 20) < 0.05);
+    CHECK(std::abs(circle.x - 60) < 0.05);
+    CHECK(std::abs((circle.y + circle.h / 2) - 20) < 0.05);   // Mitte bei y = 100 - 80
+}
+
+TEST(svg_transforms_and_styles) {
+    auto r = importSvg(R"svg(<svg xmlns="http://www.w3.org/2000/svg" width="100mm" height="100mm" viewBox="0 0 100 100">
+        <style>.cut{fill:none;stroke:#FF0000} .eng { fill : #0000ff }</style>
+        <g transform="translate(10 20) scale(2)">
+          <rect class="cut" width="10" height="5"/>
+          <circle class="eng" cx="20" cy="20" r="5"/>
+          <text x="0" y="0">Hallo</text>
+        </g>
+        <rect width="5" height="5" style="display:none"/>
+        <rect width="5" height="5" fill="none"/></svg>)svg");
+    CHECK(r.ok);
+    CHECK(r.layers.size() == 2);
+    size_t cut = r.layers[0].colorKey == "#ff0000" ? 0 : 1;
+    CHECK(r.layers[cut].intent == Intent::Cut);
+    CHECK(r.layers[1 - cut].intent == Intent::Engrave);
+    Rect b = boundsOf(r, cut);
+    NEAR(b.x, 10); NEAR(b.w, 20); NEAR(b.h, 10);
+    NEAR(b.y, 100 - 20 - 10);
+    CHECK(r.warnings.size() == 1);   // Text übersprungen
+}
+
+TEST(svg_rounded_rect_and_use) {
+    auto r = importSvg(R"svg(<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="50mm" height="50mm" viewBox="0 0 50 50">
+        <defs><rect id="r" width="10" height="10" rx="2" fill="none" stroke="black"/></defs>
+        <use xlink:href="#r" x="5" y="5"/><use href="#r" x="30" y="30"/></svg>)svg");
+    CHECK(r.ok);
+    CHECK(r.shapes.size() == 2);   // nur die Verwendungen, nicht die Definition
+    Rect a = r.shapes[0].path.bounds();
+    NEAR(a.x, 5); NEAR(a.w, 10);
+    CHECK(r.shapes[0].path.points.size() > 8);   // gerundete Ecken
+}
+
+TEST(svg_errors_are_explained) {
+    CHECK(!importSvg("kein xml").ok);
+    CHECK(!importSvg("<html></html>").ok);
+    auto t = importSvg(R"svg(<svg xmlns="http://www.w3.org/2000/svg"><text>Nur Text</text></svg>)svg");
+    CHECK(!t.ok);
+    CHECK(t.error.find("Pfade") != std::string::npos);
+}
+
+TEST(controller_imports_and_merges_layers) {
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    auto r = c.importFile(std::string(MB_SOURCE_DIR) + "/examples/schild.svg");
+    CHECK(r.ok);
+    CHECK(c.documentTitle() == "schild");
+    size_t layers = c.layerRows().size();
+    CHECK(layers == 3);
+    CHECK(c.layerRows()[2].intent == "Markieren");   // Grün: Rahmen + offene Linie
+    c.importFile(std::string(MB_SOURCE_DIR) + "/examples/schild.svg");   // gleiche Farben → keine neuen Ebenen
+    CHECK(c.layerRows().size() == layers);
+    c.undo();
+    c.undo();
+    CHECK(c.layerRows().size() == 3);   // zurück zum Beispiel
+    CHECK(!c.importFile("/tmp/datei.pdf").ok);
 }
 
 int main() {

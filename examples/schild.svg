@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Beispiel für MacBurn: Türschild 120 × 60 mm.
+     Rot = Schneiden, Blau gefüllt = Gravieren, Grün = Ritzen. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="120mm" height="60mm" viewBox="0 0 120 60">
+  <style>
+    .schnitt { fill: none; stroke: #ff0000; stroke-width: 0.1 }
+    .gravur  { fill: #0000ff }
+    .ritzen  { fill: none; stroke: #00ff00; stroke-width: 0.1 }
+  </style>
+  <!-- Außenkontur mit runden Ecken und zwei Löchern -->
+  <rect class="schnitt" x="0.5" y="0.5" width="119" height="59" rx="6"/>
+  <circle class="schnitt" cx="8" cy="30" r="2"/>
+  <circle class="schnitt" cx="112" cy="30" r="2"/>
+  <!-- Gravierte Fläche: Haus -->
+  <path class="gravur" d="M20 44 V28 L32 18 L44 28 V44 H36 V34 H28 V44 Z"/>
+  <!-- Gravierte Wellen -->
+  <path class="gravur" d="M54 26 q6 -6 12 0 t12 0 t12 0 t12 0 v4 q-6 -6 -12 0 t-12 0 t-12 0 t-12 0 z"/>
+  <path class="gravur" d="M54 36 q6 -6 12 0 t12 0 t12 0 t12 0 v4 q-6 -6 -12 0 t-12 0 t-12 0 t-12 0 z"/>
+  <!-- Ritzlinie als Rahmen innen -->
+  <rect class="ritzen" x="4" y="4" width="112" height="52" rx="4"/>
+  <path class="ritzen" d="M54 48 H102"/>
+</svg>

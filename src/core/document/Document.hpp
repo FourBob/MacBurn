@@ -21,6 +21,7 @@ struct Layer {
     Intent intent = Intent::Engrave;
     bool output = true;
     IntentSettings overrides;   // Projekt-Abweichungen vom Material
+    std::string colorKey;       // "#rrggbb" aus dem Import – gleiche Farbe = gleiche Ebene
 };
 
 struct Shape {

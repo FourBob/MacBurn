@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "app/AppController.hpp"
+#include "io/SvgImport.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 
@@ -150,6 +152,49 @@ void AppController::pressButton(const std::string& key) {
             [after](Document& d) { d = after; }, [before](Document& d) { d = before; }});
         changed();
     }
+}
+
+void AppController::newDocument() {
+    Document before = doc_, after;
+    undo_.perform(doc_, {"Neues Projekt", [after](Document& d) { d = after; }, [before](Document& d) { d = before; }});
+    isSample_ = false;
+    title_ = "Unbenannt";
+    layer_ = 0;
+    message_.clear();
+    changed();
+}
+
+AppController::ImportResult AppController::importFile(const std::string& path) {
+    std::string ext = path.size() >= 4 ? path.substr(path.size() - 4) : "";
+    for (auto& ch : ext) ch = char(std::tolower(static_cast<unsigned char>(ch)));
+    if (ext != ".svg") return {false, "Dieses Format wird noch nicht unterstützt. Möglich ist bisher SVG."};
+
+    SvgImportResult r = importSvgFile(path);
+    if (!r.ok) return {false, r.error};
+
+    Document before = doc_;
+    Document after = isSample_ ? Document{} : doc_;
+    // Ebenen nach Farbe zusammenführen
+    std::vector<size_t> map(r.layers.size());
+    for (size_t i = 0; i < r.layers.size(); ++i) {
+        auto it = std::find_if(after.layers.begin(), after.layers.end(),
+                               [&](const Layer& l) { return !l.colorKey.empty() && l.colorKey == r.layers[i].colorKey; });
+        if (it != after.layers.end()) map[i] = size_t(it - after.layers.begin());
+        else { map[i] = after.layers.size(); after.layers.push_back(r.layers[i]); }
+    }
+    size_t firstNew = after.shapes.size();
+    for (auto& s : r.shapes) { s.layer = map[s.layer]; after.shapes.push_back(std::move(s)); }
+
+    std::string name = path.substr(path.find_last_of('/') + 1);
+    undo_.perform(doc_, {"Import " + name, [after](Document& d) { d = after; }, [before](Document& d) { d = before; }});
+    if (isSample_) { title_ = name.substr(0, name.size() - 4); isSample_ = false; layer_ = 0; }
+
+    size_t count = after.shapes.size() - firstNew;
+    message_ = name + ": " + std::to_string(count) + (count == 1 ? " Form" : " Formen") + " in "
+             + std::to_string(r.layers.size()) + (r.layers.size() == 1 ? " Ebene" : " Ebenen") + " importiert";
+    for (auto& w : r.warnings) message_ += " · " + w;
+    changed();
+    return {true, message_};
 }
 
 void AppController::undo() { undo_.undo(doc_); changed(); }
@@ -312,12 +357,12 @@ std::string AppController::estimateText() const {
 }
 
 std::string AppController::statusText() const {
-    if (!message_.empty()) return message_;
     auto* m = machine();
     std::string s = m ? m->displayName() + " · nicht verbunden" : "Keine Maschine";
     Rect wa = workArea(), b = doc_.bounds();
     if (!wa.contains(b)) s += " · ⚠ Design liegt außerhalb der Arbeitsfläche";
     if (!store_.errors().empty()) s += " · " + std::to_string(store_.errors().size()) + " Profil(e) fehlerhaft";
+    if (!message_.empty()) s = message_ + "   —   " + s;
     return s;
 }
 
