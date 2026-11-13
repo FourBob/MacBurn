@@ -631,6 +631,120 @@ TEST(open_project_with_missing_material_uses_saved_values) {
     CHECK(!c.openFile("/nonexistent/datei.macburn").ok);
 }
 
+// ---------- Anfasser, Drehen, Neigen, Gruppieren ----------
+
+TEST(handles_scale_and_rotate) {
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    c.setViewScale(1.0);                       // 1 Punkt = 1 mm: Rahmenabstand 4 mm
+    c.pointerDown({150, 80}, 1.0, false);      // Anhänger 40 × 80 bei 150/40
+    Rect r = selRect(c);
+    NEAR(r.w, 40); NEAR(r.h, 80);
+    // Ecke oben rechts (Anfasser 4) liegt bei 194/124 – proportional verdoppeln
+    c.pointerDown({194, 124}, 2.0, false);
+    c.pointerDrag({234, 204});
+    c.pointerUp();
+    r = selRect(c);
+    CHECK(std::abs(r.w - 80) < 0.01 && std::abs(r.h - 160) < 0.01);
+    NEAR(r.x, 150); NEAR(r.y, 40);             // Gegenecke bleibt stehen
+    CHECK(c.undoTitle().find("Skalieren") != std::string::npos);
+    // Kante rechts (Anfasser 3): nur die Breite
+    c.pointerDown({234, 120}, 2.0, false);
+    c.pointerDrag({194, 120});
+    c.pointerUp();
+    r = selRect(c);
+    CHECK(std::abs(r.w - 40) < 0.01 && std::abs(r.h - 160) < 0.01);
+    // Drehen: Anfasser über der Mitte (170 / 204 + 22), mit ⇧ auf 15° einrasten
+    c.pointerDown({170, 226}, 2.0, false);
+    c.pointerDrag({170 - 106, 120.5}, true);   // fast genau 90° nach links
+    c.pointerUp();
+    r = selRect(c);
+    CHECK(std::abs(r.w - 160) < 0.05 && std::abs(r.h - 40) < 0.05);
+    CHECK(c.undoTitle().find("Drehen") != std::string::npos);
+}
+
+TEST(skew_and_rotate_by_angle) {
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    c.pointerDown({150, 80}, 1.0, false);
+    c.setNumber("selSkewX", 45);               // Höhe 80 → Breite 40 + 80
+    Rect r = selRect(c);
+    CHECK(std::abs(r.w - 120) < 0.01 && std::abs(r.h - 80) < 0.01);
+    c.undo();
+    c.pointerDown({150, 80}, 1.0, false);
+    c.setNumber("selRotate", 180);
+    r = selRect(c);
+    CHECK(std::abs(r.w - 40) < 0.01 && std::abs(r.h - 80) < 0.01);
+    bool zero = false;
+    for (auto& f : c.inspector()) if (f.key == "selRotate") zero = f.value == 0;   // Feld steht wieder auf 0
+    CHECK(zero);
+}
+
+TEST(group_and_ungroup) {
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    c.selectAll();                              // Untersetzer und Anhänger
+    CHECK(c.canGroup());
+    c.groupSelection();
+    CHECK(!c.canGroup());
+    c.clearSelection();
+    c.pointerDown({150, 80}, 1.0, false);       // ein Klick wählt jetzt alles
+    NEAR(selRect(c).x, 30);
+    CHECK(c.canUngroup());
+    c.ungroupSelection();                       // in die sechs ursprünglichen Teile
+    c.clearSelection();
+    c.pointerDown({150, 80}, 1.0, false);
+    NEAR(selRect(c).w, 40);                     // nur noch der Anhänger
+    CHECK(!c.canUngroup());
+}
+
+TEST(import_ungroup_by_svg_element_and_parts_saved) {
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    c.importFile(std::string(MB_SOURCE_DIR) + "/examples/schild.svg");
+    CHECK(c.canUngroup());
+    c.ungroupSelection();
+    c.clearSelection();
+    c.selectAll();
+    int n = 0;
+    for (auto& f : c.inspector()) if (f.label.rfind("Auswahl (", 0) == 0) n = std::atoi(f.label.c_str() + 9);
+    CHECK(n == 8);                              // 8 SVG-Elemente
+    std::string file = tempPath("teile.macburn");
+    c.saveProject(file);
+    AppController d(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    d.openFile(file);
+    d.selectAll();
+    CHECK(d.canGroup());
+    std::filesystem::remove(file);
+}
+
+TEST(align_and_distribute) {
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    // Ein Objekt: an der Fläche (410 × 410)
+    c.pointerDown({150, 80}, 1.0, false);   // Anhänger 40 × 80
+    c.alignSelection(2);
+    NEAR(selRect(c).x, 370);
+    c.alignSelection(3);
+    NEAR(selRect(c).y, 330);
+    // Drei Objekte: aneinander und verteilt
+    c.duplicateSelection();
+    c.nudge(-200, -200);
+    c.selectAll();
+    c.alignSelection(5);                    // alle unten bündig
+    c.distributeSelection(true);
+    NEAR(selRect(c).y, 30);                 // unterste Kante: Kreis des Untersetzers
+
+    // Gleiche Abstände: drei 30-mm-Quadrate bei x = 5, 45, 205 → mittleres auf x = 105
+    AppController d(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    d.newDocument();
+    std::string svg = std::string(MB_SOURCE_DIR) + "/examples/test-30mm.svg";
+    d.importFile(svg);
+    d.importFile(svg); d.nudge(40, 0);
+    d.importFile(svg); d.nudge(200, 0);
+    d.selectAll();
+    CHECK(d.canDistribute());
+    d.distributeSelection(true);
+    d.clearSelection();
+    d.pointerDown({120, 6}, 0.5, false);    // Rand des mittleren Quadrats
+    NEAR(selRect(d).x, 105);
+}
+
 int main() {
     for (auto& [name, fn] : tests) {
         int before = failures;

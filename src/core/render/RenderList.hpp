@@ -26,6 +26,7 @@ struct RenderList {
     std::optional<Vec2> head;       // Laserkopf (nur verbunden)
     std::optional<Rect> jobFrame;   // Umriss des Auftrags auf der Maschine
     std::optional<Rect> selection;  // Rahmen um die Auswahl
+    std::vector<Vec2> handles;      // 8 Größen-Anfasser, dann der Dreh-Anfasser (mm)
 };
 
 // Gestalten: Ebenenfarben. Vorbereiten: Brennfarbe + Leerfahrten. Lasern: Brennfarbe.

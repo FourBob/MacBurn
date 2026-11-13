@@ -231,6 +231,7 @@ struct Context {
     std::map<std::string, Decls> tagRules, classRules, idRules;
     std::map<std::string, const xml::Element*> ids;
     int texts = 0, images = 0, gradients = 0, others = 0;
+    uint32_t parts = 0;
 
     struct LayerAcc { std::string key; int filled = 0, closed = 0, open = 0; size_t index = 0; };
     std::vector<LayerAcc> accs;
@@ -489,6 +490,7 @@ void emit(std::vector<Polyline> polys, const Style& st, const std::string& name,
         }
         return std::abs(a) / 2;
     };
+    uint32_t part = ++ctx.parts;   // alle Teilpfade eines Elements gehören zusammen
     for (auto& p : polys) {
         // Linien ohne Fläche können nicht gefüllt werden (SVG füllt standardmäßig schwarz).
         bool fillThis = filled && p.points.size() > 2 && area(p) > 1e-6;
@@ -498,7 +500,7 @@ void emit(std::vector<Polyline> polys, const Style& st, const std::string& name,
         if (fillThis) { p.closed = true; ++acc.filled; }
         else if (p.closed) ++acc.closed;
         else ++acc.open;
-        ctx.shapes.push_back({name, li, std::move(p)});
+        ctx.shapes.push_back({name, li, std::move(p), 0, part});
     }
 }
 

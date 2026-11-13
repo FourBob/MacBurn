@@ -6,6 +6,7 @@
 @implementation CanvasView {
     mb::RenderList _list;
     CGFloat _zoom;      // 1 = Arbeitsfläche passt ins Fenster
+    double _reportedScale;
     NSPoint _pan;       // Verschiebung in Punkten
 }
 
@@ -41,6 +42,11 @@
     NSRectFill(self.bounds);
 
     CGAffineTransform t = [self transform];
+    if (std::abs(t.a - _reportedScale) > 1e-3 && self.onViewScale) {
+        _reportedScale = t.a;
+        double s = t.a;
+        dispatch_async(dispatch_get_main_queue(), ^{ if (self.onViewScale) self.onViewScale(s); });
+    }
     const auto& wa = _list.workArea;
     CGRect bed = CGRectApplyAffineTransform(CGRectMake(wa.x, wa.y, wa.w, wa.h), t);
 
@@ -81,19 +87,30 @@
         CGPathRelease(p);
     }
 
-    // Auswahl
-    if (_list.selection) {
-        const auto& s = *_list.selection;
-        CGRect r = CGRectInset(CGRectApplyAffineTransform(CGRectMake(s.x, s.y, s.w, s.h), t), -4, -4);
+    // Auswahl mit Anfassern (Positionen liefert der Kern)
+    if (_list.selection && _list.handles.size() == 9) {
+        auto P = [&](size_t i) { return CGPointApplyAffineTransform(CGPointMake(_list.handles[i].x, _list.handles[i].y), t); };
         CGContextSetStrokeColorWithColor(ctx, NSColor.controlAccentColor.CGColor);
         CGContextSetLineWidth(ctx, 1);
-        CGContextStrokeRect(ctx, r);
+        CGPoint corners[5] = {P(0), P(2), P(4), P(6), P(0)};
+        CGContextAddLines(ctx, corners, 5);
+        CGContextStrokePath(ctx);
+        CGPoint stem[2] = {P(5), P(8)};
+        CGContextStrokeLineSegments(ctx, stem, 2);
+        for (size_t i = 0; i < 8; ++i) {
+            CGPoint p = P(i);
+            CGRect r = CGRectMake(p.x - 3.5, p.y - 3.5, 7, 7);
+            CGContextSetFillColorWithColor(ctx, NSColor.textBackgroundColor.CGColor);
+            CGContextFillRect(ctx, r);
+            CGContextStrokeRect(ctx, r);
+        }
+        CGPoint rp = P(8);
+        CGRect rr = CGRectMake(rp.x - 5, rp.y - 5, 10, 10);
         CGContextSetFillColorWithColor(ctx, NSColor.controlAccentColor.CGColor);
-        for (CGPoint p : {CGPointMake(CGRectGetMinX(r), CGRectGetMinY(r)), CGPointMake(CGRectGetMaxX(r), CGRectGetMinY(r)),
-                          CGPointMake(CGRectGetMinX(r), CGRectGetMaxY(r)), CGPointMake(CGRectGetMaxX(r), CGRectGetMaxY(r))})
-            CGContextFillRect(ctx, CGRectMake(p.x - 3, p.y - 3, 6, 6));
+        CGContextFillEllipseInRect(ctx, rr);
+        const auto& s = *_list.selection;
         NSString* size = [NSString stringWithFormat:@"%.1f × %.1f mm", s.w, s.h];
-        [size drawAtPoint:NSMakePoint(CGRectGetMinX(r), CGRectGetMaxY(r) + 4)
+        [size drawAtPoint:NSMakePoint(P(6).x, P(6).y + 6)
            withAttributes:@{NSFontAttributeName: [NSFont monospacedDigitSystemFontOfSize:10 weight:NSFontWeightMedium],
                             NSForegroundColorAttributeName: NSColor.controlAccentColor}];
     }

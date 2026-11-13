@@ -31,6 +31,12 @@ uint32_t Document::nextObjectId() const {
     return m + 1;
 }
 
+uint32_t Document::nextPartId() const {
+    uint32_t m = 0;
+    for (const auto& s : shapes) m = std::max(m, s.part);
+    return m + 1;
+}
+
 ObjectSet Document::allObjects() const {
     ObjectSet o;
     for (const auto& s : shapes) o.insert(s.object);
@@ -86,12 +92,12 @@ Document Document::sample() {
     };
     // Untersetzer Ø 100 mm mit graviertem Rahmen und Anhänger daneben.
     d.shapes = {
-        {"Untersetzer", 0, Polyline::ellipse(80, 80, 50, 50), 1},
-        {"Ring", 1, Polyline::ellipse(80, 80, 42, 42), 1},
-        {"Feld", 1, Polyline::rectangle(60, 70, 40, 20), 1},
-        {"Anhänger", 0, Polyline::rectangle(150, 40, 40, 80), 2},
-        {"Loch", 0, Polyline::ellipse(170, 110, 3, 3, 32), 2},
-        {"Ritzlinie", 2, {{{155, 50}, {185, 50}}, false}, 2},
+        {"Untersetzer", 0, Polyline::ellipse(80, 80, 50, 50), 1, 1},
+        {"Ring", 1, Polyline::ellipse(80, 80, 42, 42), 1, 2},
+        {"Feld", 1, Polyline::rectangle(60, 70, 40, 20), 1, 3},
+        {"Anhänger", 0, Polyline::rectangle(150, 40, 40, 80), 2, 4},
+        {"Loch", 0, Polyline::ellipse(170, 110, 3, 3, 32), 2, 5},
+        {"Ritzlinie", 2, {{{155, 50}, {185, 50}}, false}, 2, 6},
     };
     return d;
 }

@@ -41,7 +41,7 @@ std::string writeProject(const ProjectData& p) {
         for (const auto& pt : s.path.points) pts.push_back(Value::array({Value::number(pt.x), Value::number(pt.y)}));
         shapes.push_back(Value::object({
             {"name", Value::string(s.name)}, {"layer", Value::number(double(s.layer))},
-            {"object", Value::number(s.object)}, {"closed", Value::boolean(s.path.closed)},
+            {"object", Value::number(s.object)}, {"part", Value::number(s.part)}, {"closed", Value::boolean(s.path.closed)},
             {"points", Value::array(std::move(pts))}}));
     }
     std::map<std::string, Value> laser = {
@@ -81,6 +81,7 @@ std::optional<ProjectData> readProject(const std::string& text, std::string* err
         shape.name = s["name"].asString();
         shape.layer = size_t(std::max(0.0, s["layer"].asNumber()));
         shape.object = uint32_t(std::max(0.0, s["object"].asNumber()));
+        shape.part = uint32_t(std::max(0.0, s["part"].asNumber()));
         shape.path.closed = s["closed"].asBool();
         for (const auto& pt : s["points"].asArray()) {
             const auto& xy = pt.asArray();

@@ -80,11 +80,33 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
     [edit addItem:item(@"Löschen", @selector(deleteCore:), @"")];
 
     NSMenu* object = [[NSMenu alloc] initWithTitle:@"Objekt"];
-    [object addItem:item(@"Um 90° drehen", @selector(rotateCore:), @"")];
+    [object addItem:item(@"90° nach links drehen", @selector(rotateLeftCore:), @"")];
+    [object addItem:item(@"90° nach rechts drehen", @selector(rotateCore:), @"")];
     [object addItem:item(@"Horizontal spiegeln", @selector(flipHCore:), @"")];
     [object addItem:item(@"Vertikal spiegeln", @selector(flipVCore:), @"")];
     [object addItem:NSMenuItem.separatorItem];
     [object addItem:item(@"Auf der Fläche zentrieren", @selector(centerCore:), @"")];
+    NSMenu* align = [[NSMenu alloc] initWithTitle:@"Ausrichten"];
+    NSArray* alignTitles = @[@"Links", @"Horizontal mittig", @"Rechts", @"Oben", @"Vertikal mittig", @"Unten"];
+    for (NSInteger i = 0; i < 6; ++i) {
+        NSMenuItem* ai = item(alignTitles[i], @selector(alignCore:), @"");
+        ai.tag = i;
+        [align addItem:ai];
+        if (i == 2) [align addItem:NSMenuItem.separatorItem];
+    }
+    [align addItem:NSMenuItem.separatorItem];
+    NSMenuItem* dh = item(@"Horizontal verteilen", @selector(distributeCore:), @"");
+    dh.tag = 0;
+    NSMenuItem* dv = item(@"Vertikal verteilen", @selector(distributeCore:), @"");
+    dv.tag = 1;
+    [align addItem:dh];
+    [align addItem:dv];
+    NSMenuItem* alignItem = [[NSMenuItem alloc] initWithTitle:@"Ausrichten" action:nil keyEquivalent:@""];
+    alignItem.submenu = align;
+    [object addItem:alignItem];
+    [object addItem:NSMenuItem.separatorItem];
+    [object addItem:item(@"Gruppieren", @selector(groupCore:), @"g")];
+    [object addItem:item(@"Gruppierung aufheben", @selector(ungroupCore:), @"g", NSEventModifierFlagCommand | NSEventModifierFlagShift)];
 
     NSMenu* view = [[NSMenu alloc] initWithTitle:@"Darstellung"];
     NSArray* phases = @[@"Gestalten", @"Vorbereiten", @"Lasern"];
@@ -135,10 +157,14 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
     if (mi.action == @selector(undoCore:)) { mi.title = NS(_core->undoTitle()); return _core->canUndo(); }
     if (mi.action == @selector(redoCore:)) { mi.title = NS(_core->redoTitle()); return _core->canRedo(); }
     if (mi.action == @selector(duplicateCore:) || mi.action == @selector(deleteCore:) || mi.action == @selector(deselectAllCore:) ||
-        mi.action == @selector(rotateCore:) || mi.action == @selector(flipHCore:) || mi.action == @selector(flipVCore:) ||
+        mi.action == @selector(rotateCore:) || mi.action == @selector(rotateLeftCore:) || mi.action == @selector(flipHCore:) || mi.action == @selector(flipVCore:) ||
         mi.action == @selector(centerCore:))
         return _core->hasSelection() && _core->canEdit();
     if (mi.action == @selector(selectAll:)) return _core->canEdit();
+    if (mi.action == @selector(alignCore:)) return _core->hasSelection() && _core->canEdit();
+    if (mi.action == @selector(distributeCore:)) return _core->canDistribute() && _core->canEdit();
+    if (mi.action == @selector(groupCore:)) return _core->canGroup() && _core->canEdit();
+    if (mi.action == @selector(ungroupCore:)) return _core->canUngroup() && _core->canEdit();
     if (mi.action == @selector(laserConnect:)) return !_core->deviceConnected();
     if (mi.action == @selector(laserDisconnect:)) return _core->deviceConnected() && !_core->jobRunning();
     if (mi.action == @selector(laserHome:) || mi.action == @selector(laserFrame:)) return _core->deviceConnected() && !_core->jobRunning();
@@ -165,6 +191,11 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
 - (void)duplicateCore:(id)sender { _core->duplicateSelection(); }
 - (void)deleteCore:(id)sender { _core->deleteSelection(); }
 - (void)rotateCore:(id)sender { _core->rotateSelection(-90); }
+- (void)rotateLeftCore:(id)sender { _core->rotateSelection(90); }
+- (void)groupCore:(id)sender { _core->groupSelection(); }
+- (void)alignCore:(NSMenuItem*)sender { _core->alignSelection(int(sender.tag)); }
+- (void)distributeCore:(NSMenuItem*)sender { _core->distributeSelection(sender.tag == 0); }
+- (void)ungroupCore:(id)sender { _core->ungroupSelection(); }
 - (void)flipHCore:(id)sender { _core->flipSelection(true); }
 - (void)flipVCore:(id)sender { _core->flipSelection(false); }
 - (void)centerCore:(id)sender { _core->centerSelection(); }

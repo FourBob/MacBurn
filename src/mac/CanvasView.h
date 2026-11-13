@@ -11,5 +11,7 @@
 // Pfeiltasten (dx, dy, shift), Esc, Löschtaste
 @property (nonatomic, copy) void (^onKey)(int dx, int dy, BOOL shift, BOOL escape, BOOL del);
 // Maus in mm: phase 0 = gedrückt, 1 = gezogen, 2 = losgelassen; tolerance in mm
+// Bildschirmpunkte je mm (ändert sich mit Zoom und Fenstergröße)
+@property (nonatomic, copy) void (^onViewScale)(double pxPerMm);
 @property (nonatomic, copy) void (^onPointer)(int phase, double x, double y, double tolerance, BOOL shift);
 @end

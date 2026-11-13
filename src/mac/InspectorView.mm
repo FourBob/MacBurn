@@ -137,6 +137,25 @@ static NSTextField* label(NSString* s, NSFont* font, NSColor* color) {
                 view = [self row:NS(f.label) control:g unit:nil];
                 break;
             }
+            case mb::Field::Kind::ButtonRow: {
+                NSStackView* row = [NSStackView stackViewWithViews:@[]];
+                row.spacing = 4;
+                for (size_t i = 0; i < f.options.size(); ++i) {
+                    NSString* opt = NS(f.options[i]);
+                    NSArray* parts = [opt componentsSeparatedByString:@"|"];
+                    NSString* tip = parts.count > 1 ? parts[1] : opt;
+                    NSImage* img = [NSImage imageWithSystemSymbolName:parts[0] accessibilityDescription:tip];
+                    NSButton* b = img ? [NSButton buttonWithImage:img target:self action:@selector(button:)]
+                                      : [NSButton buttonWithTitle:tip target:self action:@selector(button:)];
+                    b.identifier = [NSString stringWithFormat:@"%@:%zu", key, i];
+                    b.toolTip = tip;
+                    b.enabled = f.enabled;
+                    b.controlSize = NSControlSizeSmall;
+                    [row addArrangedSubview:b];
+                }
+                view = row;
+                break;
+            }
             case mb::Field::Kind::Progress: {
                 NSProgressIndicator* p = [[NSProgressIndicator alloc] init];
                 p.indeterminate = NO;
@@ -162,7 +181,7 @@ static NSTextField* label(NSString* s, NSFont* font, NSColor* color) {
         }
         if (!view) continue;
         [_stack addArrangedSubview:view];
-        if (f.kind != mb::Field::Kind::Button && f.kind != mb::Field::Kind::JogPad) [self fill:view];
+        if (f.kind != mb::Field::Kind::Button && f.kind != mb::Field::Kind::JogPad && f.kind != mb::Field::Kind::ButtonRow) [self fill:view];
         if (f.kind == mb::Field::Kind::Header && view != _stack.arrangedSubviews.firstObject)
             [_stack setCustomSpacing:16 afterView:_stack.arrangedSubviews[_stack.arrangedSubviews.count - 2]];
     }
@@ -179,8 +198,13 @@ static NSTextField* label(NSString* s, NSFont* font, NSColor* color) {
         u.textColor = NSColor.secondaryLabelColor;
         [views addObject:u];
     }
+    // Füller am Ende: Steuerelemente und Einheiten stehen in allen Zeilen bündig
+    NSView* spacer = [[NSView alloc] init];
+    [spacer setContentHuggingPriority:1 forOrientation:NSLayoutConstraintOrientationHorizontal];
+    [views addObject:spacer];
     NSStackView* row = [NSStackView stackViewWithViews:views];
     row.spacing = 6;
+    row.distribution = NSStackViewDistributionFill;
     return row;
 }
 

@@ -34,7 +34,8 @@ struct LayerRow {
 
 // Generischer Inspektor: Der Kern beschreibt Felder, die Oberfläche baut sie.
 struct Field {
-    enum class Kind { Header, Info, Choice, Number, Toggle, Button, JogPad, Progress, Anchor } kind = Kind::Info;
+    // ButtonRow: options = "symbol|Beschriftung"; Klick → pressButton(key + ":" + Index)
+    enum class Kind { Header, Info, Choice, Number, Toggle, Button, JogPad, Progress, Anchor, ButtonRow } kind = Kind::Info;
     std::string key, label;
     std::vector<std::string> options;   // Choice
     int selected = 0;                   // Choice
@@ -97,7 +98,9 @@ public:
     // --- Formen bearbeiten ---
     // Maus: Punkte in mm; tolerance in mm (aus der aktuellen Zoomstufe)
     void pointerDown(Vec2 p, double tolerance, bool extend);
-    void pointerDrag(Vec2 p);
+    void pointerDrag(Vec2 p, bool shift = false);
+    // Bildschirmmaßstab, damit Anfasser immer gleich groß wirken
+    void setViewScale(double pxPerMm) { pxPerMm_ = pxPerMm > 0 ? pxPerMm : 1; }
     void pointerUp();
     void nudge(double dx, double dy);   // Pfeiltasten im Gestalten/Vorbereiten
     void selectAll();
@@ -107,6 +110,15 @@ public:
     void rotateSelection(double degrees);
     void flipSelection(bool horizontal);
     void centerSelection();
+    void skewSelection(double degX, double degY);
+    // 0 links, 1 horizontal mittig, 2 rechts, 3 oben, 4 vertikal mittig, 5 unten
+    void alignSelection(int mode);
+    void distributeSelection(bool horizontal);   // ab drei Objekten: gleiche Abstände
+    bool canDistribute() const { return selection_.size() >= 3; }
+    void groupSelection();
+    void ungroupSelection();
+    bool canGroup() const { return selection_.size() > 1; }
+    bool canUngroup() const;
     bool hasSelection() const { return !selection_.empty(); }
     bool canEdit() const { return !dev_.jobRunning; }
 
@@ -175,7 +187,15 @@ private:
 
     ObjectSet selection_;
     bool lockRatio_ = true;
-    struct Drag { Document before; Vec2 start; bool moved = false; };
+    struct Drag {
+        Document before;
+        Vec2 start;
+        bool moved = false;
+        int handle = -1;     // -1 = verschieben, 0–7 = skalieren, 8 = drehen
+        Rect box;            // Auswahl beim Start
+    };
+    double pxPerMm_ = 3;
+    std::vector<Vec2> selectionHandles() const;
     std::optional<Drag> drag_;
 
     const MachineProfile* machine() const;

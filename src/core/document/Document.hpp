@@ -31,6 +31,7 @@ struct Shape {
     size_t layer = 0;
     Polyline path;
     uint32_t object = 0;   // zusammengehörige Formen (z. B. ein importiertes SVG) bewegen sich gemeinsam
+    uint32_t part = 0;     // ursprüngliches Element (z. B. ein SVG-Pfad mit Löchern) – für „Gruppierung aufheben“
 };
 
 using ObjectSet = std::set<uint32_t>;
@@ -42,6 +43,7 @@ struct Document {
     Rect bounds() const;
     Rect bounds(const ObjectSet& objects) const;
     uint32_t nextObjectId() const;
+    uint32_t nextPartId() const;
     ObjectSet allObjects() const;
     // Oberstes Objekt an einem Punkt (mm); tolerance für Linien und Konturen
     std::optional<uint32_t> hitTest(Vec2 p, double tolerance) const;

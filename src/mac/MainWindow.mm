@@ -134,9 +134,14 @@ static NSTextField* small(NSString* s, BOOL secondary) {
             core->nudge(dx * step, dy * step);
         }
     };
+    __weak CanvasView* weakCanvas = _canvas;
+    _canvas.onViewScale = ^(double s) {
+        core->setViewScale(s);
+        [weakCanvas setRenderList:core->renderList()];
+    };
     _canvas.onPointer = ^(int phase, double x, double y, double tol, BOOL shift) {
         if (phase == 0) core->pointerDown({x, y}, tol, shift);
-        else if (phase == 1) core->pointerDrag({x, y});
+        else if (phase == 1) core->pointerDrag({x, y}, shift);
         else core->pointerUp();
     };
     _inspector = [[InspectorView alloc] initWithCore:_core];

@@ -166,7 +166,13 @@ void AppController::setToggle(const std::string& key, bool on) {
 }
 
 void AppController::pressButton(const std::string& key) {
-    if (key == "rot90") { rotateSelection(-90); return; }
+    if (key == "rot90" || key == "rotR") { rotateSelection(-90); return; }
+    if (key == "rotL") { rotateSelection(90); return; }
+    if (key == "group") { groupSelection(); return; }
+    if (key.rfind("align:", 0) == 0) { alignSelection(std::atoi(key.c_str() + 6)); return; }
+    if (key == "distribute:0") { distributeSelection(true); return; }
+    if (key == "distribute:1") { distributeSelection(false); return; }
+    if (key == "ungroup") { ungroupSelection(); return; }
     if (key == "flipH") { flipSelection(true); return; }
     if (key == "flipV") { flipSelection(false); return; }
     if (key == "center") { centerSelection(); return; }
@@ -320,7 +326,13 @@ AppController::ImportResult AppController::importFile(const std::string& path) {
     }
     size_t firstNew = after.shapes.size();
     uint32_t object = after.nextObjectId();   // ein importiertes SVG ist ein Objekt
-    for (auto& s : r.shapes) { s.layer = map[s.layer]; s.object = object; after.shapes.push_back(std::move(s)); }
+    uint32_t partBase = after.nextPartId();
+    for (auto& s : r.shapes) {
+        s.layer = map[s.layer];
+        s.object = object;
+        s.part += partBase;
+        after.shapes.push_back(std::move(s));
+    }
 
     std::string name = path.substr(path.find_last_of('/') + 1);
     undo_.perform(doc_, {"Import " + name, [after](Document& d) { d = after; }, [before](Document& d) { d = before; }});
@@ -527,7 +539,10 @@ std::string AppController::redoTitle() const { return canRedo() ? "Wiederholen: 
 
 RenderList AppController::renderList() const {
     RenderList rl = buildRenderList(doc_, job_, phase_, workArea());
-    if (!selection_.empty() && phase_ != Phase::Laser) rl.selection = doc_.bounds(selection_);
+    if (!selection_.empty() && phase_ != Phase::Laser) {
+        rl.selection = doc_.bounds(selection_);
+        rl.handles = selectionHandles();
+    }
     if (phase_ == Phase::Laser) {
         if (dev_.connected) rl.head = workPos();
         if (auto off = offsetFor()) {
