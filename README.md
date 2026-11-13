@@ -76,15 +76,24 @@ Die Werkzeugleiste links auf der Zeichenfläche (oder die Taste, solange die Fl�
 | Stern | S | wie Dreieck; Zacken und Innenradius im Inspektor |
 | Polylinie | N | Punkte klicken; Doppelklick oder ↩ beendet, Klick auf den Startpunkt schließt, Esc bricht ab |
 
-Ein Klick ohne Ziehen legt die Form in 20 mm an. Neue Formen kommen in die links gewählte Ebene
-(in einem leeren Projekt wird eine Schnittebene angelegt) und sind danach ausgewählt – exakte Maße im Inspektor.
+**Genaue Maße:** Ist ein Werkzeug aktiv, zeigt der Inspektor seine Maße – X/Y und Breite/Höhe (Rechteck,
+Ellipse, Eckenradius), Mittelpunkt, Durchmesser und Drehung (Dreieck, Polygon, Stern) bzw. Start, Länge und
+Winkel (Linie). *Erstellen* oder ↩ legt die Form genau so an. Ein Klick auf die Fläche legt sie mit diesen Maßen
+mittig an der Stelle an.
+
+Neue Formen kommen in die links gewählte Ebene (in einem leeren Projekt wird eine Schnittebene angelegt)
+und sind danach ausgewählt.
+
+**Zahlenfelder rechnen mit:** Komma oder Punkt, `100/3`, `25+12,5`, `(10+2)*3`, Einheiten `mm`, `cm`, `in`, `pt`.
+Angezeigt werden bis zu drei Nachkommastellen.
 
 ### Formen bearbeiten
 
 - **Auswählen:** Klick auf Kontur oder Fläche, ⇧ für mehrere. Ein importiertes SVG ist ein Objekt.
 - **Verschieben:** mit der Maus oder den Pfeiltasten.
 - **Skalieren:** Anfasser am Auswahlrahmen – Ecken proportional, Kanten einachsig, ⇧ kehrt um.
-  Oder X, Y, Breite, Höhe im Inspektor eingeben.
+  Oder X, Y, Breite, Höhe im Inspektor eingeben. Der **Bezugspunkt** (9-Punkt-Raster) legt fest, auf welchen
+  Punkt sich X/Y beziehen und welcher Punkt beim Ändern der Größe stehen bleibt.
 - **Drehen:** Dreh-Anfasser über der Auswahl (⇧ = 15°-Schritte), beliebiger Winkel im Inspektor, 90° links/rechts.
 - **Neigen** in X und Y, **Spiegeln**, **auf der Fläche zentrieren**.
 - **Ausrichten** links, mittig, rechts, oben, mittig, unten – ein Objekt an der Fläche, mehrere aneinander.

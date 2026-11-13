@@ -87,6 +87,8 @@ public:
     void selectLayer(int index);
     void setChoice(const std::string& key, int index);
     void setNumber(const std::string& key, double value);
+    // Eingabe als Text: Komma/Punkt, Rechnen (100/3), Einheiten (2in, 1,5cm). false = ungültig
+    bool setNumberText(const std::string& key, const std::string& text);
     void setToggle(const std::string& key, bool on);
     void pressButton(const std::string& key);
     void undo();
@@ -223,6 +225,11 @@ private:
 
     Tool tool_ = Tool::Select;
     double rectRadius_ = 0;
+    // Maße für „Erstellen“ und Klick ohne Ziehen
+    double toolX_ = 10, toolY_ = 10, toolW_ = 20, toolH_ = 20, toolDia_ = 20, toolRot_ = 0, toolLen_ = 20, toolAngle_ = 0;
+    int refPoint_ = 6;   // Bezugspunkt für X/Y der Auswahl: unten links
+    void createFromFields(std::optional<Vec2> at);
+    void addCreatedShape(const Document& before, Polyline shape);
     int polygonSides_ = 6, starPoints_ = 5;
     double starInner_ = 0.5;
     struct Create {

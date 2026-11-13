@@ -491,18 +491,19 @@ void AppController::setSelectionNumber(const std::string& key, double v) {
     if (key == "selSkewY") { skewSelection(0, v); return; }
     if (key == "selOffset") { offsetSelection(v); return; }
     Rect b = doc_.bounds(selection_);
+    Vec2 ref = anchorPoint(b, refPoint_);
     if (key == "selX" || key == "selY") {
-        Vec2 d = key == "selX" ? Vec2{v - b.x, 0} : Vec2{0, v - b.y};
+        Vec2 d = key == "selX" ? Vec2{v - ref.x, 0} : Vec2{0, v - ref.y};
         editDoc("Position ändern", [&](Document& doc) { doc.transform(selection_, [d](Vec2 q) { return q + d; }); });
         return;
     }
-    // Größe: unten links bleibt stehen
+    // Größe: der Bezugspunkt bleibt stehen
     if (v <= 0.01) return;
     double sx = 1, sy = 1;
     if (key == "selW" && b.w > 1e-9) { sx = v / b.w; if (lockRatio_) sy = sx; }
     if (key == "selH" && b.h > 1e-9) { sy = v / b.h; if (lockRatio_) sx = sy; }
     editDoc("Größe ändern", [&](Document& doc) {
-        doc.transform(selection_, [=](Vec2 q) { return Vec2{b.x + (q.x - b.x) * sx, b.y + (q.y - b.y) * sy}; });
+        doc.transform(selection_, [=](Vec2 q) { return Vec2{ref.x + (q.x - ref.x) * sx, ref.y + (q.y - ref.y) * sy}; });
     });
 }
 
@@ -515,13 +516,18 @@ void AppController::addSelectionFields(std::vector<Field>& f) const {
     f.push_back({Field::Kind::Header, "", n == 1 ? "Auswahl" : "Auswahl (" + std::to_string(n) + " Objekte)"});
     auto num = [&](const char* key, const char* label, double v, double lo) {
         Field x{Field::Kind::Number, key, label};
-        x.value = std::round(v * 100) / 100;
+        x.value = std::round(v * 1000) / 1000;
         x.min = lo; x.max = 2000; x.step = 0.1; x.unit = "mm";
         x.enabled = canEdit();
         f.push_back(x);
     };
-    num("selX", "X", b.x, -2000);
-    num("selY", "Y", b.y, -2000);
+    Vec2 ref = anchorPoint(b, refPoint_);
+    Field rp{Field::Kind::Anchor, "refPoint", "Bezugspunkt"};
+    rp.selected = refPoint_;
+    rp.enabled = canEdit();
+    f.push_back(rp);
+    num("selX", "X", ref.x, -2000);
+    num("selY", "Y", ref.y, -2000);
     num("selW", "Breite", b.w, 0.01);
     num("selH", "Höhe", b.h, 0.01);
     Field lock{Field::Kind::Toggle, "lockRatio", "Proportional"};

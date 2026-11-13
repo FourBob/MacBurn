@@ -9,6 +9,7 @@
 #include "job/Job.hpp"
 #include "profiles/Profiles.hpp"
 #include "util/Json.hpp"
+#include "util/NumberInput.hpp"
 
 #include <chrono>
 #include <cmath>
@@ -897,6 +898,82 @@ TEST(draw_polyline_open_closed_cancel) {
     CHECK(!c.isCreating());
     CHECK(c.selectToolByKey("r") && c.tool() == Tool::Rect);
     CHECK(!c.selectToolByKey("x"));
+}
+
+// ---------- Genaue Maße ----------
+
+TEST(number_input) {
+    NEARTOL(*parseNumberInput("12,5"), 12.5, 1e-12);
+    NEARTOL(*parseNumberInput(" 12.5 mm"), 12.5, 1e-12);
+    NEARTOL(*parseNumberInput("100/3"), 100.0 / 3, 1e-12);
+    NEARTOL(*parseNumberInput("25+12,5"), 37.5, 1e-12);
+    NEARTOL(*parseNumberInput("(10+2)*3"), 36, 1e-12);
+    NEARTOL(*parseNumberInput("2in"), 50.8, 1e-12);
+    NEARTOL(*parseNumberInput("1,5 cm"), 15, 1e-12);
+    NEARTOL(*parseNumberInput("-4,2"), -4.2, 1e-12);
+    NEARTOL(*parseNumberInput("3 x 4"), 12, 1e-12);
+    CHECK(!parseNumberInput(""));
+    CHECK(!parseNumberInput("abc"));
+    CHECK(!parseNumberInput("5/0"));
+    CHECK(!parseNumberInput("5+"));
+    CHECK(formatNumber(33.33333) == "33,333");
+    CHECK(formatNumber(20) == "20");
+    CHECK(formatNumber(-0.0001) == "0");
+}
+
+TEST(create_from_fields_and_return) {
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    c.newDocument();
+    c.setTool(Tool::Rect);
+    CHECK(c.setNumberText("toolX", "10"));
+    CHECK(c.setNumberText("toolY", "20"));
+    CHECK(c.setNumberText("toolW", "100/3"));
+    CHECK(c.setNumberText("toolH", "1,5cm"));
+    CHECK(!c.setNumberText("toolH", "viel"));     // ungültig: Wert bleibt
+    c.pressButton("toolCreate");
+    Rect r = selRect(c);
+    NEARTOL(r.x, 10, 1e-9); NEARTOL(r.y, 20, 1e-9);
+    NEARTOL(r.w, 100.0 / 3, 0.001); NEARTOL(r.h, 15, 1e-9);
+    CHECK(c.tool() == Tool::Select);
+    // ↩ mit aktivem Werkzeug erstellt ebenfalls
+    c.setTool(Tool::Polygon);
+    c.setNumber("toolX", 200); c.setNumber("toolY", 200); c.setNumber("toolDia", 50); c.setNumber("toolSides", 6);
+    c.setNumber("toolRot", 30);                     // 6-Eck mit waagerechter Oberkante
+    CHECK(c.finishCreation());
+    r = selRect(c);
+    NEARTOL(r.w, 50, 1e-9);
+    NEARTOL(r.h, 50 * std::sqrt(3) / 2, 0.001);   // Inspektor zeigt 3 Nachkommastellen
+    // Linie: Länge und Winkel
+    c.setTool(Tool::Line);
+    c.setNumber("toolX", 0); c.setNumber("toolY", 0); c.setNumber("toolLen", 30); c.setNumber("toolAngle", 90);
+    c.pressButton("toolCreate");
+    r = selRect(c);
+    NEARTOL(r.h, 30, 1e-9); NEARTOL(r.w, 0, 1e-9);
+    // Klick legt die Form mit den Werkzeugmaßen mittig an der Stelle an
+    c.setTool(Tool::Rect);
+    c.setNumber("toolW", 40); c.setNumber("toolH", 10);
+    c.pointerDown({300, 300}, 0.5, false);
+    c.pointerUp();
+    r = selRect(c);
+    NEARTOL(r.x, 280, 1e-9); NEARTOL(r.y, 295, 1e-9);
+}
+
+TEST(reference_point_for_position_and_size) {
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    c.pointerDown({150, 80}, 1.0, false);           // Anhänger 40 × 80 bei 150/40
+    c.setChoice("refPoint", 4);                     // Mitte
+    double x = 0, y = 0;
+    for (auto& f : c.inspector()) { if (f.key == "selX") x = f.value; if (f.key == "selY") y = f.value; }
+    NEAR(x, 170); NEAR(y, 80);
+    c.setNumberText("selX", "200");                 // Mitte auf 200
+    Rect r = selRect(c);                            // selRect liest X/Y – jetzt Mittelpunkt
+    NEAR(r.x, 200);
+    c.setNumberText("selW", "20");                  // proportional um die Mitte
+    for (auto& f : c.inspector()) { if (f.key == "selX") x = f.value; if (f.key == "selY") y = f.value; }
+    NEAR(x, 200); NEAR(y, 80);                      // Mitte bleibt stehen
+    c.setChoice("refPoint", 6);                     // unten links
+    for (auto& f : c.inspector()) { if (f.key == "selX") x = f.value; if (f.key == "selY") y = f.value; }
+    NEAR(x, 190); NEAR(y, 60);                      // 20 × 40 um die Mitte (200/80)
 }
 
 int main() {

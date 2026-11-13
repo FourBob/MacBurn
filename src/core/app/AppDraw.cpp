@@ -149,45 +149,78 @@ void AppController::updateCreate(Vec2 p, bool shift) {
     changed();
 }
 
+void AppController::addCreatedShape(const Document& before, Polyline shape) {
+    Rect b = shape.bounds();
+    if (shape.points.size() < 2 || (b.w < 0.01 && b.h < 0.01)) { cancelCreation(); return; }
+    Document base = before;
+    if (base.layers.size() < doc_.layers.size()) base.layers = doc_.layers;   // eben angelegte Ebene behalten
+    Document after = base;
+    uint32_t obj = after.nextObjectId();
+    after.shapes.push_back({toolName(tool_), drawingLayer(), shape, obj, after.nextPartId()});
+    doc_ = base;
+    create_.reset();
+    undo_.perform(doc_, {std::string(toolName(tool_)) + " zeichnen", [after](Document& d) { d = after; },
+                         [base](Document& d) { d = base; }});
+    isSample_ = false;
+    selection_ = {obj};
+    tool_ = Tool::Select;   // nach dem Zeichnen zurück zur Auswahl
+    message_.clear();
+    changed();
+}
+
+void AppController::createFromFields(std::optional<Vec2> at) {
+    if (tool_ == Tool::Select || tool_ == Tool::Polyline) return;
+    Document before = create_ ? create_->before : doc_;
+    drawingLayer();
+    Polyline shape;
+    double rot = toolRot_ * M_PI / 180;
+    switch (tool_) {
+        case Tool::Rect:
+        case Tool::Ellipse: {
+            // Klick = Mitte der neuen Form; sonst X/Y = linke untere Ecke
+            double x = at ? at->x - toolW_ / 2 : toolX_, y = at ? at->y - toolH_ / 2 : toolY_;
+            shape = tool_ == Tool::Rect ? Polyline::roundedRect(x, y, toolW_, toolH_, rectRadius_)
+                                        : Polyline::ellipse(x + toolW_ / 2, y + toolH_ / 2, toolW_ / 2, toolH_ / 2,
+                                                            circleSegments(std::max(toolW_, toolH_) / 2));
+            break;
+        }
+        case Tool::Triangle:
+        case Tool::Polygon:
+        case Tool::Star: {
+            Vec2 c = at ? *at : Vec2{toolX_, toolY_};
+            if (tool_ == Tool::Star) shape = Polyline::star(c.x, c.y, toolDia_ / 2, starPoints_, starInner_, rot);
+            else shape = Polyline::regularPolygon(c.x, c.y, toolDia_ / 2, tool_ == Tool::Triangle ? 3 : polygonSides_, rot);
+            break;
+        }
+        case Tool::Line: {
+            Vec2 a = at ? *at : Vec2{toolX_, toolY_};
+            double ang = toolAngle_ * M_PI / 180;
+            shape = {{a, a + Vec2{std::cos(ang) * toolLen_, std::sin(ang) * toolLen_}}, false};
+            break;
+        }
+        default: return;
+    }
+    addCreatedShape(before, shape);
+}
+
 void AppController::commitCreate(bool clicked) {
     if (!create_) return;
     Document before = create_->before;
-    Polyline shape;
     if (tool_ == Tool::Polyline) {
+        Polyline shape;
         shape.points = create_->points;
         if (shape.points.size() >= 4 && (shape.points.back() - shape.points.front()).length() < 1e-6) {
             shape.points.pop_back();
             shape.closed = true;
         }
         if (shape.points.size() < 2) { cancelCreation(); return; }
-    } else if (clicked) {
-        // Klick ohne Ziehen: Form in 20 mm Größe an dieser Stelle
-        Vec2 a = create_->start;
-        bool centered = tool_ == Tool::Triangle || tool_ == Tool::Polygon || tool_ == Tool::Star;
-        shape = centered ? shapeFor(a, a + Vec2{0, 10}, false) : shapeFor(a, a + Vec2{20, 20}, false);
-    } else {
-        shape = shapeFor(create_->start, create_->current, false);
-        // Ziehen mit ⇧ ist schon in der Vorschau enthalten – die letzte Vorschauform übernehmen
-        if (!doc_.shapes.empty() && doc_.shapes.size() == before.shapes.size() + 1) shape = doc_.shapes.back().path;
+        addCreatedShape(before, shape);
+        return;
     }
-    Rect b = shape.bounds();
-    if (shape.points.size() < 2 || (b.w < 0.05 && b.h < 0.05)) { cancelCreation(); return; }
-
-    Document after = before;
-    uint32_t obj = after.nextObjectId();
-    after.shapes.push_back({toolName(tool_), drawingLayer(), shape, obj, after.nextPartId()});
-    if (after.layers.empty()) after.layers = doc_.layers;   // neu angelegte Ebene mitnehmen
-    else if (after.layers.size() < doc_.layers.size()) after.layers = doc_.layers;
-    doc_ = before;
-    if (doc_.layers.size() < after.layers.size()) doc_.layers = after.layers;
-    create_.reset();
-    undo_.perform(doc_, {std::string(toolName(tool_)) + " zeichnen", [after](Document& d) { d = after; },
-                         [before](Document& d) { d = before; }});
-    isSample_ = false;
-    selection_ = {obj};
-    tool_ = Tool::Select;   // nach dem Zeichnen zurück zur Auswahl
-    message_.clear();
-    changed();
+    if (clicked) { createFromFields(create_->start); return; }   // Klick ohne Ziehen: Werkzeugmaße
+    // Ziehen: die letzte Vorschauform übernehmen (enthält auch ⇧)
+    if (doc_.shapes.size() == before.shapes.size() + 1) addCreatedShape(before, doc_.shapes.back().path);
+    else cancelCreation();
 }
 
 void AppController::pointerMove(Vec2 p) {
@@ -204,8 +237,13 @@ void AppController::pointerDoubleClick(Vec2) {
 }
 
 bool AppController::finishCreation() {
-    if (!create_ || tool_ != Tool::Polyline) return false;
-    commitCreate(false);
+    if (tool_ == Tool::Polyline) {
+        if (!create_) return false;
+        commitCreate(false);
+        return true;
+    }
+    if (tool_ == Tool::Select || create_) return false;
+    createFromFields(std::nullopt);   // ↩ mit aktivem Werkzeug: Form aus den Maßen im Inspektor
     return true;
 }
 
@@ -225,14 +263,44 @@ void AppController::addToolFields(std::vector<Field>& f) const {
         x.value = v; x.min = lo; x.max = hi; x.step = step; x.unit = unit;
         f.push_back(x);
     };
-    if (tool_ == Tool::Rect) num("toolRadius", "Eckenradius", rectRadius_, 0, 500, 0.5, "mm");
-    if (tool_ == Tool::Polygon) num("toolSides", "Ecken", polygonSides_, 3, 64, 1, "");
-    if (tool_ == Tool::Star) {
-        num("toolPoints", "Zacken", starPoints_, 3, 64, 1, "");
-        num("toolInner", "Innenradius", std::round(starInner_ * 100), 5, 95, 5, "%");
+    switch (tool_) {
+        case Tool::Rect:
+        case Tool::Ellipse:
+            num("toolX", "X (links)", toolX_, -2000, 2000, 0.1, "mm");
+            num("toolY", "Y (unten)", toolY_, -2000, 2000, 0.1, "mm");
+            num("toolW", "Breite", toolW_, 0.01, 2000, 0.1, "mm");
+            num("toolH", "Höhe", toolH_, 0.01, 2000, 0.1, "mm");
+            if (tool_ == Tool::Rect) num("toolRadius", "Eckenradius", rectRadius_, 0, 500, 0.5, "mm");
+            break;
+        case Tool::Triangle:
+        case Tool::Polygon:
+        case Tool::Star:
+            num("toolX", "Mitte X", toolX_, -2000, 2000, 0.1, "mm");
+            num("toolY", "Mitte Y", toolY_, -2000, 2000, 0.1, "mm");
+            num("toolDia", "Durchmesser", toolDia_, 0.01, 2000, 0.1, "mm");
+            num("toolRot", "Drehung", toolRot_, -360, 360, 1, "°");
+            if (tool_ == Tool::Polygon) num("toolSides", "Ecken", polygonSides_, 3, 64, 1, "");
+            if (tool_ == Tool::Star) {
+                num("toolPoints", "Zacken", starPoints_, 3, 64, 1, "");
+                num("toolInner", "Innenradius", std::round(starInner_ * 100), 5, 95, 5, "%");
+            }
+            break;
+        case Tool::Line:
+            num("toolX", "Start X", toolX_, -2000, 2000, 0.1, "mm");
+            num("toolY", "Start Y", toolY_, -2000, 2000, 0.1, "mm");
+            num("toolLen", "Länge", toolLen_, 0.01, 2000, 0.1, "mm");
+            num("toolAngle", "Winkel", toolAngle_, -360, 360, 1, "°");
+            break;
+        default: break;
     }
     std::string layer = layer_ >= 0 && layer_ < int(doc_.layers.size()) ? doc_.layers[size_t(layer_)].name : "Schnitt (neu)";
-    f.push_back({Field::Kind::Info, "", "Neue Formen kommen in die Ebene „" + layer + "“. Eine andere Ebene links wählen."});
+    if (tool_ == Tool::Polyline) {
+        f.push_back({Field::Kind::Info, "", "Punkte auf der Fläche klicken. Doppelklick oder ↩ beendet, Klick auf den Startpunkt schließt die Form."});
+    } else {
+        f.push_back({Field::Kind::Button, "toolCreate", "Erstellen (↩)"});
+        f.push_back({Field::Kind::Info, "", "Oder auf der Fläche ziehen. Ein Klick legt die Form mit diesen Maßen an der Stelle an (Mitte)."});
+    }
+    f.push_back({Field::Kind::Info, "", "Neue Formen kommen in die Ebene „" + layer + "“."});
     f.push_back({Field::Kind::Button, "toolSelect", "Fertig (V)"});
 }
 

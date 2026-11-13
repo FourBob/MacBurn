@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "app/AppController.hpp"
 #include "io/Project.hpp"
+#include "util/NumberInput.hpp"
 #include "io/SvgImport.hpp"
 
 #include <fstream>
@@ -145,6 +146,8 @@ void AppController::setChoice(const std::string& key, int index) {
         jogStep_ = index; changed();
     } else if (key == "origin") {
         origin_ = index; settingsDirty_ = true; changed();
+    } else if (key == "refPoint") {
+        refPoint_ = std::clamp(index, 0, 8); changed();
     } else if (key == "anchor") {
         anchor_ = std::clamp(index, 0, 8); settingsDirty_ = true; changed();
     }
@@ -152,6 +155,14 @@ void AppController::setChoice(const std::string& key, int index) {
 
 void AppController::setNumber(const std::string& key, double v) {
     if (key == "toolRadius") { rectRadius_ = std::max(0.0, v); changed(); return; }
+    if (key == "toolX") { toolX_ = v; changed(); return; }
+    if (key == "toolY") { toolY_ = v; changed(); return; }
+    if (key == "toolW") { toolW_ = std::max(0.01, v); changed(); return; }
+    if (key == "toolH") { toolH_ = std::max(0.01, v); changed(); return; }
+    if (key == "toolDia") { toolDia_ = std::max(0.01, v); changed(); return; }
+    if (key == "toolRot") { toolRot_ = v; changed(); return; }
+    if (key == "toolLen") { toolLen_ = std::max(0.01, v); changed(); return; }
+    if (key == "toolAngle") { toolAngle_ = v; changed(); return; }
     if (key == "toolSides") { polygonSides_ = std::clamp(int(std::lround(v)), 3, 64); changed(); return; }
     if (key == "toolPoints") { starPoints_ = std::clamp(int(std::lround(v)), 3, 64); changed(); return; }
     if (key == "toolInner") { starInner_ = std::clamp(v / 100.0, 0.05, 0.95); changed(); return; }
@@ -164,6 +175,18 @@ void AppController::setNumber(const std::string& key, double v) {
     });
 }
 
+bool AppController::setNumberText(const std::string& key, const std::string& text) {
+    auto v = parseNumberInput(text);
+    if (!v) {
+        message_ = "„" + text + "“ ist keine Zahl. Möglich sind z. B. 12,5 · 100/3 · 25+12,5 · 2in · 1,5cm.";
+        changed();   // Feld zeigt wieder den alten Wert
+        return false;
+    }
+    if (message_.rfind("„", 0) == 0) message_.clear();
+    setNumber(key, *v);
+    return true;
+}
+
 void AppController::setToggle(const std::string& key, bool on) {
     if (key == "lockRatio") { lockRatio_ = on; changed(); return; }
     if (key == "output") editLayer(on ? "Ebene ausgeben" : "Ebene nicht ausgeben", [on](Layer& l) { l.output = on; });
@@ -171,6 +194,7 @@ void AppController::setToggle(const std::string& key, bool on) {
 
 void AppController::pressButton(const std::string& key) {
     if (key == "toolSelect") { setTool(Tool::Select); return; }
+    if (key == "toolCreate") { createFromFields(std::nullopt); return; }
     if (key == "rot90" || key == "rotR") { rotateSelection(-90); return; }
     if (key == "rotL") { rotateSelection(90); return; }
     if (key == "group") { groupSelection(); return; }

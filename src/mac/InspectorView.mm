@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #import "InspectorView.h"
 #import "Bridge.hpp"
+#include "util/NumberInput.hpp"
 
 @implementation InspectorView {
     mb::AppController* _core;
@@ -67,23 +68,21 @@ static NSTextField* label(NSString* s, NSFont* font, NSColor* color) {
                 break;
             }
             case mb::Field::Kind::Number: {
-                NSTextField* t = [NSTextField textFieldWithString:@""];
-                NSNumberFormatter* nf = [[NSNumberFormatter alloc] init];
-                nf.numberStyle = NSNumberFormatterDecimalStyle;
-                nf.maximumFractionDigits = f.step < 1 ? 2 : 0;
-                nf.minimum = @(f.min); nf.maximum = @(f.max);
-                t.formatter = nf;
-                t.doubleValue = f.value;
+                // Freie Eingabe: Der Kern versteht Komma/Punkt, Rechnen (100/3) und Einheiten (2in, 1,5cm).
+                NSTextField* t = [NSTextField textFieldWithString:NS(mb::formatNumber(f.value, f.step < 1 ? 3 : 0))];
+                t.toolTip = @"Auch Rechnen möglich: 100/3, 25+12,5, 2in, 1,5cm";
                 t.alignment = NSTextAlignmentRight;
                 t.font = [NSFont monospacedDigitSystemFontOfSize:12 weight:NSFontWeightRegular];
                 if (f.highlight) t.textColor = NSColor.controlAccentColor;
                 t.identifier = key;
-                t.target = self; t.action = @selector(number:);
-                [t.widthAnchor constraintEqualToConstant:72].active = YES;
+                t.target = self; t.action = @selector(numberText:);
+                t.enabled = f.enabled;
+                [t.widthAnchor constraintEqualToConstant:80].active = YES;
                 NSStepper* st = [[NSStepper alloc] init];
                 st.minValue = f.min; st.maxValue = f.max; st.increment = f.step; st.doubleValue = f.value;
                 st.identifier = key;
                 st.target = self; st.action = @selector(number:);
+                st.enabled = f.enabled;
                 NSStackView* ctl = [NSStackView stackViewWithViews:@[t, st]];
                 ctl.spacing = 2;
                 view = [self row:NS(f.label) control:ctl unit:NS(f.unit)];
@@ -210,6 +209,11 @@ static NSTextField* label(NSString* s, NSFont* font, NSColor* color) {
 
 - (void)choice:(NSPopUpButton*)p { _core->setChoice(STD(p.identifier), int(p.indexOfSelectedItem)); }
 - (void)number:(NSControl*)c { _core->setNumber(STD(c.identifier), c.doubleValue); }
+- (void)numberText:(NSTextField*)t {
+    bool ok = _core->setNumberText(STD(t.identifier), STD(t.stringValue));
+    _shown.clear();   // Feld neu aufbauen: zeigt das Ergebnis (z. B. „33,333“ statt „100/3“) bzw. den alten Wert
+    if (!ok) NSBeep();
+}
 - (void)toggle:(NSSwitch*)s { _core->setToggle(STD(s.identifier), s.state == NSControlStateValueOn); }
 - (void)anchor:(NSButton*)b { _core->setChoice(STD(b.identifier), int(b.tag)); }
 - (void)button:(NSButton*)b { _core->pressButton(STD(b.identifier)); }

@@ -29,6 +29,7 @@ target_compile_options(clipper2 PRIVATE -w)
 # ---------------------------------------------------------------------------
 add_library(macburn_core STATIC
   src/core/util/Json.cpp
+  src/core/util/NumberInput.cpp
   src/core/profiles/Profiles.cpp
   src/core/geometry/Geometry.cpp
   src/core/geometry/Boolean.cpp
