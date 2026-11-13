@@ -37,8 +37,9 @@
   "limits": {
     "maxSpeedMmMin": 6000,
     "accelerationMmS2": 500,
+    "travelSpeedMmMin": 3000,
     "stepsPerMm": 80,
-    "note": "Hersteller nennt 10 000 mm/min; die Firmware begrenzt auf 6000 mm/min ($110/$111)."
+    "note": "Hersteller nennt 10 000 mm/min; die Firmware begrenzt auf 6000 mm/min ($110/$111). Bei Eilfahrten mit 6000 mm/min hat die X-Achse im Test (13.11.2026) Schritte verloren – Leerfahrten daher mit 3000 mm/min."
   },
   "airAssist": { "available": true, "control": "manual", "flowLMin": 30, "note": "Eigene Pumpe mit Drehregler, nicht über M7/M8 schaltbar." },
   "safety": {

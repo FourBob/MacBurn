@@ -97,6 +97,7 @@ MachineProfile machineFromJson(const json::Value& v) {
     }
     m.maxSpeedMmMin = v["limits"]["maxSpeedMmMin"].asNumber(6000);
     m.accelerationMmS2 = v["limits"]["accelerationMmS2"].asNumber(1000);
+    m.travelSpeedMmMin = std::min(v["limits"]["travelSpeedMmMin"].asNumber(3000), m.maxSpeedMmMin);
     m.sMax = v["controller"]["sMax"].asNumber(1000);
     m.baudRate = int(v["controller"]["baudRate"].asNumber(115200));
     m.airAssistControllable = v["airAssist"]["control"].asString() == "gcode";

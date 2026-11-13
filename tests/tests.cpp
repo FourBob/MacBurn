@@ -51,6 +51,7 @@ TEST(loads_reference_machine_and_materials) {
     NEAR(m->variants.at(0).area.y, 410);   // laut $131
     NEAR(m->maxSpeedMmMin, 6000);           // laut $110
     NEAR(m->accelerationMmS2, 500);         // laut $120
+    NEAR(m->travelSpeedMmMin, 3000);
     NEAR(m->variants.at(1).area.x, 750);
     CHECK(!m->airAssistControllable);
     auto mats = store.materialsFor(*m);
@@ -415,6 +416,10 @@ TEST(controller_preflight_without_device) {
     std::string g = writeGcode(JobBuilder(m, mat).build(d), o);
     CHECK(g.find("G1 X110.000 Y50.000") != std::string::npos);
     CHECK(g.find("G0 X100.000 Y50.000") != std::string::npos);   // Rückkehr zum Startpunkt
+    o.travelSpeed = 3000;
+    g = writeGcode(JobBuilder(m, mat).build(d), o);
+    CHECK(g.find("G0") == std::string::npos);                       // kein Eilgang
+    CHECK(g.find("G1 X100.000 Y50.000 F3000 S0") != std::string::npos);
 }
 
 int main() {

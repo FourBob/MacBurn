@@ -145,10 +145,12 @@ void AppController::frame() {
     Rect b = outputBounds();
     double x0 = b.x + off->x, y0 = b.y + off->y, x1 = x0 + b.w, y1 = y0 + b.h;
     Vec2 back = workPos();
+    // Laser aus (M5, S0); Fahrgeschwindigkeit aus dem Profil statt Eilgang – verhindert Schrittverluste
+    std::string feed = " F" + f3(machine() ? machine()->travelSpeedMmMin : 3000) + " S0";
     std::vector<std::string> lines = {"M5", "G90",
-        "G0 X" + f3(x0) + " Y" + f3(y0), "G0 X" + f3(x1) + " Y" + f3(y0),
-        "G0 X" + f3(x1) + " Y" + f3(y1), "G0 X" + f3(x0) + " Y" + f3(y1),
-        "G0 X" + f3(x0) + " Y" + f3(y0), "G0 X" + f3(back.x) + " Y" + f3(back.y)};
+        "G1 X" + f3(x0) + " Y" + f3(y0) + feed, "G1 X" + f3(x1) + " Y" + f3(y0) + feed,
+        "G1 X" + f3(x1) + " Y" + f3(y1) + feed, "G1 X" + f3(x0) + " Y" + f3(y1) + feed,
+        "G1 X" + f3(x0) + " Y" + f3(y0) + feed, "G1 X" + f3(back.x) + " Y" + f3(back.y) + feed};
     for (auto& l : lines) device_->sendLine(l);   // Laser bleibt aus
     message_ = "Rahmen wird abgefahren (Laser aus).";
     changed();
@@ -194,6 +196,7 @@ void AppController::startJob() {
     o.sMax = m->sMax;
     o.airAssistGcode = m->airAssistControllable;
     o.offset = *off;
+    o.travelSpeed = m->travelSpeedMmMin;
     std::vector<std::string> lines;
     std::istringstream in(writeGcode(job_, o));
     for (std::string l; std::getline(in, l);) lines.push_back(l);

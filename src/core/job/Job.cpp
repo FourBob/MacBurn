@@ -156,7 +156,13 @@ std::string writeGcode(const Job& job, const GcodeOptions& opt) {
     double lastF = -1, lastS = -1;
     for (const auto& m : job.moves) {
         if (m.kind == Move::Kind::Rapid) {
-            std::snprintf(buf, sizeof buf, "G0 X%.3f Y%.3f S0\n", m.to.x + opt.offset.x, m.to.y + opt.offset.y);
+            if (opt.travelSpeed > 0) {
+                // Schonende Leerfahrt: normaler Fahrbefehl, Laser aus (S0)
+                std::snprintf(buf, sizeof buf, "G1 X%.3f Y%.3f F%.0f S0\n", m.to.x + opt.offset.x, m.to.y + opt.offset.y, opt.travelSpeed);
+                lastF = opt.travelSpeed;
+            } else {
+                std::snprintf(buf, sizeof buf, "G0 X%.3f Y%.3f S0\n", m.to.x + opt.offset.x, m.to.y + opt.offset.y);
+            }
             lastS = 0;
             g << buf;
             continue;

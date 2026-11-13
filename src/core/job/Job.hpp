@@ -51,6 +51,7 @@ struct GcodeOptions {
     bool dynamicPower = true;      // M4 statt M3
     bool airAssistGcode = false;   // M8/M9 ausgeben
     Vec2 offset;                   // Verschiebung aller Koordinaten (Jobursprung)
+    double travelSpeed = 0;        // > 0: Leerfahrten als G1 mit S0 und diesem Vorschub statt G0
 };
 std::string writeGcode(const Job& job, const GcodeOptions& opt);
 

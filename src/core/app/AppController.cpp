@@ -228,7 +228,7 @@ void AppController::redo() { undo_.redo(doc_); changed(); }
 
 std::string AppController::exportGcode() const {
     GcodeOptions o;
-    if (auto* m = machine()) { o.sMax = m->sMax; o.airAssistGcode = m->airAssistControllable; }
+    if (auto* m = machine()) { o.sMax = m->sMax; o.airAssistGcode = m->airAssistControllable; o.travelSpeed = m->travelSpeedMmMin; }
     return writeGcode(job_, o);
 }
 
@@ -370,7 +370,7 @@ std::vector<Field> AppController::inspector() const {
 
 std::string AppController::estimateText() const {
     auto* m = machine();
-    double s = m ? estimateSeconds(job_, m->maxSpeedMmMin, m->accelerationMmS2) : estimateSeconds(job_, 6000);
+    double s = m ? estimateSeconds(job_, m->travelSpeedMmMin, m->accelerationMmS2) : estimateSeconds(job_, 3000);
     int t = int(std::lround(s));
     char b[32];
     if (t >= 3600) std::snprintf(b, sizeof b, "%d:%02d:%02d", t / 3600, t / 60 % 60, t % 60);
