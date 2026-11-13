@@ -37,4 +37,47 @@ Polyline Polyline::ellipse(double cx, double cy, double rx, double ry, int segme
     return p;
 }
 
+Polyline Polyline::roundedRect(double x, double y, double w, double h, double radius) {
+    double r = std::clamp(radius, 0.0, std::min(std::abs(w), std::abs(h)) / 2);
+    if (r < 1e-6) return rectangle(x, y, w, h);
+    Polyline p;
+    p.closed = true;
+    const int seg = std::clamp(int(std::ceil(r * 4)), 4, 32);   // Punkte je Viertelkreis
+    auto arc = [&](double cx, double cy, double a0) {
+        for (int i = 0; i <= seg; ++i) {
+            double a = a0 + (M_PI / 2) * i / seg;
+            p.points.push_back({cx + r * std::cos(a), cy + r * std::sin(a)});
+        }
+    };
+    arc(x + w - r, y + r, -M_PI / 2);   // unten rechts
+    arc(x + w - r, y + h - r, 0);       // oben rechts
+    arc(x + r, y + h - r, M_PI / 2);    // oben links
+    arc(x + r, y + r, M_PI);            // unten links
+    return p;
+}
+
+Polyline Polyline::regularPolygon(double cx, double cy, double r, int sides, double rotation) {
+    Polyline p;
+    p.closed = true;
+    sides = std::max(3, sides);
+    for (int i = 0; i < sides; ++i) {
+        double a = M_PI / 2 + rotation + 2 * M_PI * i / sides;
+        p.points.push_back({cx + r * std::cos(a), cy + r * std::sin(a)});
+    }
+    return p;
+}
+
+Polyline Polyline::star(double cx, double cy, double r, int points, double innerRatio, double rotation) {
+    Polyline p;
+    p.closed = true;
+    points = std::max(3, points);
+    double ri = r * std::clamp(innerRatio, 0.05, 0.95);
+    for (int i = 0; i < 2 * points; ++i) {
+        double a = M_PI / 2 + rotation + M_PI * i / points;
+        double rr = i % 2 ? ri : r;
+        p.points.push_back({cx + rr * std::cos(a), cy + rr * std::sin(a)});
+    }
+    return p;
+}
+
 } // namespace mb

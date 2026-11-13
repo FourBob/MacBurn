@@ -151,6 +151,10 @@ void AppController::setChoice(const std::string& key, int index) {
 }
 
 void AppController::setNumber(const std::string& key, double v) {
+    if (key == "toolRadius") { rectRadius_ = std::max(0.0, v); changed(); return; }
+    if (key == "toolSides") { polygonSides_ = std::clamp(int(std::lround(v)), 3, 64); changed(); return; }
+    if (key == "toolPoints") { starPoints_ = std::clamp(int(std::lround(v)), 3, 64); changed(); return; }
+    if (key == "toolInner") { starInner_ = std::clamp(v / 100.0, 0.05, 0.95); changed(); return; }
     if (key.rfind("sel", 0) == 0) { setSelectionNumber(key, v); return; }
     editLayer("Einstellung ändern", [&](Layer& l) {
         if (key == "speed") l.overrides.speed = v;
@@ -166,6 +170,7 @@ void AppController::setToggle(const std::string& key, bool on) {
 }
 
 void AppController::pressButton(const std::string& key) {
+    if (key == "toolSelect") { setTool(Tool::Select); return; }
     if (key == "rot90" || key == "rotR") { rotateSelection(-90); return; }
     if (key == "rotL") { rotateSelection(90); return; }
     if (key == "group") { groupSelection(); return; }
@@ -435,7 +440,8 @@ std::vector<Field> AppController::inspector() const {
         return f;
     }
 
-    addSelectionFields(f);
+    addToolFields(f);
+    if (tool_ == Tool::Select) addSelectionFields(f);
     if (layer_ < 0 || layer_ >= int(doc_.layers.size())) return f;
     const Layer& l = doc_.layers[size_t(layer_)];
     f.push_back({Field::Kind::Header, "", "Ebene " + l.name});

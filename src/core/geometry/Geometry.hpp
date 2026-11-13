@@ -30,6 +30,12 @@ struct Polyline {
 
     static Polyline rectangle(double x, double y, double w, double h);
     static Polyline ellipse(double cx, double cy, double rx, double ry, int segments = 96);
+    // Rechteck mit abgerundeten Ecken (radius wird auf die halbe Kante begrenzt)
+    static Polyline roundedRect(double x, double y, double w, double h, double radius);
+    // Regelmäßiges Vieleck; rotation in Bogenmaß, 0 = erste Ecke oben
+    static Polyline regularPolygon(double cx, double cy, double r, int sides, double rotation = 0);
+    // Stern mit points Zacken; innerRatio = Innenradius / Außenradius
+    static Polyline star(double cx, double cy, double r, int points, double innerRatio, double rotation = 0);
 };
 
 } // namespace mb

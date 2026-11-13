@@ -46,6 +46,7 @@ std::vector<Vec2> AppController::selectionHandles() const {
 
 void AppController::pointerDown(Vec2 p, double tol, bool extend) {
     if (!canEdit()) return;
+    if (tool_ != Tool::Select && phase_ != Phase::Laser) { beginCreate(p); return; }
     // Zuerst die Anfasser der aktuellen Auswahl
     if (!selection_.empty() && !extend && phase_ != Phase::Laser) {
         auto hs = selectionHandles();
@@ -76,6 +77,7 @@ void AppController::pointerDown(Vec2 p, double tol, bool extend) {
 }
 
 void AppController::pointerDrag(Vec2 p, bool shift) {
+    if (create_) { if (tool_ != Tool::Polyline) updateCreate(p, shift); return; }
     if (!drag_ || selection_.empty()) return;
     Vec2 d = p - drag_->start;
     if (!drag_->moved && d.length() < 0.2) return;   // kleines Zittern ist kein Ziehen
@@ -121,6 +123,7 @@ void AppController::pointerDrag(Vec2 p, bool shift) {
 }
 
 void AppController::pointerUp() {
+    if (create_ && tool_ != Tool::Polyline) { commitCreate(!create_->dragged); return; }
     if (drag_ && drag_->moved) {
         Document before = drag_->before, after = doc_;
         std::string label = drag_->handle < 0 ? "Verschieben" : drag_->handle == 8 ? "Drehen" : "Skalieren";

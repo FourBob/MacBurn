@@ -13,5 +13,12 @@
 // Maus in mm: phase 0 = gedrückt, 1 = gezogen, 2 = losgelassen; tolerance in mm
 // Bildschirmpunkte je mm (ändert sich mit Zoom und Fenstergröße)
 @property (nonatomic, copy) void (^onViewScale)(double pxPerMm);
+// Mausbewegung ohne gedrückte Taste (mm), Doppelklick (mm), Zeichen- und Eingabetaste
+@property (nonatomic, copy) void (^onMove)(double x, double y);
+@property (nonatomic, copy) void (^onDoubleClick)(double x, double y);
+@property (nonatomic, copy) BOOL (^onCharacter)(NSString* chars);
+@property (nonatomic, copy) BOOL (^onReturn)(void);
+// Fadenkreuz statt Pfeil (Zeichenwerkzeug aktiv)
+@property (nonatomic) BOOL crosshair;
 @property (nonatomic, copy) void (^onPointer)(int phase, double x, double y, double tolerance, BOOL shift);
 @end

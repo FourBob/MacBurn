@@ -22,6 +22,7 @@ static NSToolbarItemIdentifier const kPrimary = @"primary";
     CanvasView* _canvas;
     InspectorView* _inspector;
     NSTextField* _status;
+    NSStackView* _tools;
     BOOL _refreshQueued;
 }
 
@@ -119,7 +120,7 @@ static NSTextField* small(NSString* s, BOOL secondary) {
     sideBg.material = NSVisualEffectMaterialSidebar;
     [self pin:side into:sideBg top:52];
 
-    // Mitte und rechts
+    // Mitte und rechts (Werkzeugleiste wird nach der Zeichenfläche eingehängt)
     _canvas = [[CanvasView alloc] initWithFrame:NSZeroRect];
     __weak MainWindow* weakSelf = self;
     _canvas.onDropFile = ^(NSString* path) { [weakSelf openPath:path]; };
@@ -127,6 +128,8 @@ static NSTextField* small(NSString* s, BOOL secondary) {
     _canvas.onKey = ^(int dx, int dy, BOOL shift, BOOL escape, BOOL del) {
         if (escape) {
             if (core->jobRunning()) core->stop();
+            else if (core->cancelCreation()) {}
+            else if (core->tool() != mb::Tool::Select) core->setTool(mb::Tool::Select);
             else core->clearSelection();
         } else if (del) {
             core->deleteSelection();
@@ -141,6 +144,13 @@ static NSTextField* small(NSString* s, BOOL secondary) {
     _canvas.onViewScale = ^(double s) {
         core->setViewScale(s);
         [weakCanvas setRenderList:core->renderList()];
+    };
+    _canvas.onMove = ^(double x, double y) { core->pointerMove({x, y}); };
+    _canvas.onDoubleClick = ^(double x, double y) { core->pointerDoubleClick({x, y}); };
+    _canvas.onReturn = ^BOOL { return core->finishCreation(); };
+    _canvas.onCharacter = ^BOOL(NSString* chars) {
+        if (core->phase() == mb::Phase::Laser) return NO;
+        return core->selectToolByKey(STD(chars));
     };
     _canvas.onPointer = ^(int phase, double x, double y, double tol, BOOL shift) {
         if (phase == 0) core->pointerDown({x, y}, tol, shift);
@@ -160,6 +170,36 @@ static NSTextField* small(NSString* s, BOOL secondary) {
     NSVisualEffectView* inspBg = [[NSVisualEffectView alloc] init];
     inspBg.material = NSVisualEffectMaterialSidebar;
     [self pin:inspScroll into:inspBg top:52];
+
+    _tools = [NSStackView stackViewWithViews:@[]];
+    _tools.orientation = NSUserInterfaceLayoutOrientationVertical;
+    _tools.spacing = 2;
+    _tools.edgeInsets = NSEdgeInsetsMake(5, 5, 5, 5);
+    for (const auto& t : _core->toolItems()) {
+        NSImage* img = [NSImage imageWithSystemSymbolName:NS(t.symbol) accessibilityDescription:NS(t.label)];
+        NSButton* b = img ? [NSButton buttonWithImage:img target:self action:@selector(toolPicked:)]
+                          : [NSButton buttonWithTitle:NS(t.label) target:self action:@selector(toolPicked:)];
+        b.tag = NSInteger(t.tool);
+        b.toolTip = [NSString stringWithFormat:@"%@ (%@)", NS(t.label), NS(t.key)];
+        b.bezelStyle = NSBezelStyleAccessoryBarAction;
+        b.buttonType = NSButtonTypePushOnPushOff;
+        b.refusesFirstResponder = YES;
+        [b.widthAnchor constraintEqualToConstant:30].active = YES;
+        [b.heightAnchor constraintEqualToConstant:28].active = YES;
+        [_tools addArrangedSubview:b];
+    }
+    NSVisualEffectView* toolBg = [[NSVisualEffectView alloc] init];
+    toolBg.material = NSVisualEffectMaterialMenu;
+    toolBg.state = NSVisualEffectStateActive;
+    toolBg.wantsLayer = YES;
+    toolBg.layer.cornerRadius = 9;
+    [self pin:_tools into:toolBg top:0];
+    toolBg.translatesAutoresizingMaskIntoConstraints = NO;
+    [_canvas addSubview:toolBg];
+    [NSLayoutConstraint activateConstraints:@[
+        [toolBg.leadingAnchor constraintEqualToAnchor:_canvas.leadingAnchor constant:12],
+        [toolBg.centerYAnchor constraintEqualToAnchor:_canvas.centerYAnchor],
+    ]];
 
     NSSplitView* split = [[NSSplitView alloc] init];
     split.vertical = YES;
@@ -244,6 +284,8 @@ static NSTextField* small(NSString* s, BOOL secondary) {
 }
 
 // ---------- Aktionen → Kern ----------
+
+- (void)toolPicked:(NSButton*)b { _core->setTool(mb::Tool(b.tag)); }
 
 - (void)phaseChanged:(NSSegmentedControl*)s { _core->setPhase(mb::Phase(s.selectedSegment)); }
 - (void)machineChanged:(NSPopUpButton*)p { _core->selectMachine(int(p.indexOfSelectedItem)); }
@@ -502,6 +544,10 @@ static NSTextField* small(NSString* s, BOOL secondary) {
 
     [_canvas setRenderList:_core->renderList()];
     [_inspector showFields:_core->inspector()];
+    // Werkzeuge nur beim Gestalten und Vorbereiten
+    _tools.superview.hidden = _core->phase() == mb::Phase::Laser;
+    for (NSButton* b in _tools.arrangedSubviews) b.state = b.tag == NSInteger(_core->tool()) ? NSControlStateValueOn : NSControlStateValueOff;
+    _canvas.crosshair = _core->tool() != mb::Tool::Select && _core->phase() != mb::Phase::Laser;
     _status.stringValue = NS(_core->statusText());
 }
 

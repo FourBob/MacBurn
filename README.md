@@ -61,6 +61,24 @@ Enthält eine Farbe offene Linien, wird sie nur markiert – MacBurn schneidet n
 Texte bitte vorher in Pfade umwandeln. Beispiele: [examples/schild.svg](examples/schild.svg),
 [examples/test-30mm.svg](examples/test-30mm.svg) (kleiner Testauftrag, ca. 1:20 min).
 
+### Zeichnen
+
+Die Werkzeugleiste links auf der Zeichenfläche (oder die Taste, solange die Fläche aktiv ist):
+
+| Werkzeug | Taste | Bedienung |
+|---|---|---|
+| Auswahl | V | auswählen, verschieben, Anfasser |
+| Linie | L | ziehen; ⇧ = 45°-Schritte |
+| Rechteck | R | ziehen; ⇧ = Quadrat; Eckenradius im Inspektor |
+| Ellipse | E | ziehen; ⇧ = Kreis |
+| Dreieck | D | von der Mitte aus ziehen; Richtung dreht, ⇧ = 15°-Schritte |
+| Polygon | P | wie Dreieck; Eckenzahl im Inspektor |
+| Stern | S | wie Dreieck; Zacken und Innenradius im Inspektor |
+| Polylinie | N | Punkte klicken; Doppelklick oder ↩ beendet, Klick auf den Startpunkt schließt, Esc bricht ab |
+
+Ein Klick ohne Ziehen legt die Form in 20 mm an. Neue Formen kommen in die links gewählte Ebene
+(in einem leeren Projekt wird eine Schnittebene angelegt) und sind danach ausgewählt – exakte Maße im Inspektor.
+
 ### Formen bearbeiten
 
 - **Auswählen:** Klick auf Kontur oder Fläche, ⇧ für mehrere. Ein importiertes SVG ist ein Objekt.
@@ -111,11 +129,13 @@ im Schließknopf; vor dem Schließen fragt MacBurn nach.
 | ⌫ | Löschen |
 | ⌘G / ⇧⌘G | Gruppieren / Gruppierung aufheben |
 | ← → ↑ ↓ | Auswahl um 1 mm verschieben (⇧: 10 mm); in *Lasern* verbunden: Kopf bewegen |
+| V L R E D P S N | Werkzeuge: Auswahl, Linie, Rechteck, Ellipse, Dreieck, Polygon, Stern, Polylinie |
+| ↩ | Polylinie beenden |
 | ⌘1 / ⌘2 / ⌘3 | Gestalten / Vorbereiten / Lasern |
 | ⌘K / ⇧⌘K | Laser verbinden / trennen |
 | ⌥⌘H | Referenzfahrt |
 | ⌘R | Rahmen abfahren |
-| Esc / ⌘. | Stopp (bei laufendem Auftrag), sonst Auswahl aufheben |
+| Esc / ⌘. | Stopp (bei laufendem Auftrag), sonst Zeichnen abbrechen bzw. Auswahl aufheben |
 
 ## Laser auslesen
 

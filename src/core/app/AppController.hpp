@@ -55,6 +55,15 @@ struct PreflightCheck {
     bool ok = true;           // nur bei automatischen Prüfungen
 };
 
+// Zeichenwerkzeuge
+enum class Tool { Select, Line, Rect, Ellipse, Triangle, Polygon, Star, Polyline };
+
+struct ToolItem {
+    Tool tool;
+    std::string symbol, label, key;   // SF-Symbol, Name, Taste
+    bool selected = false;
+};
+
 // Was der Hauptknopf in der Werkzeugleiste gerade tut
 enum class PrimaryAction { GoToLaser, Connect, Connecting, StartJob, Pause, Resume, Unlock };
 
@@ -94,6 +103,17 @@ public:
     bool isModified() const;
     const std::string& documentPath() const { return path_; }
     std::string documentTitle() const { return title_; }
+
+    // --- Zeichnen ---
+    void setTool(Tool t);
+    Tool tool() const { return tool_; }
+    std::vector<ToolItem> toolItems() const;
+    bool selectToolByKey(const std::string& key);   // V, L, R, E, D, P, S, N
+    void pointerMove(Vec2 p);                        // Vorschau der Polylinie
+    void pointerDoubleClick(Vec2 p);
+    bool finishCreation();                           // ↩: Polylinie abschließen
+    bool cancelCreation();                           // Esc
+    bool isCreating() const { return create_.has_value(); }
 
     // --- Formen bearbeiten ---
     // Maus: Punkte in mm; tolerance in mm (aus der aktuellen Zoomstufe)
@@ -200,6 +220,24 @@ private:
         Rect box;            // Auswahl beim Start
     };
     double pxPerMm_ = 3;
+
+    Tool tool_ = Tool::Select;
+    double rectRadius_ = 0;
+    int polygonSides_ = 6, starPoints_ = 5;
+    double starInner_ = 0.5;
+    struct Create {
+        Document before;
+        Vec2 start, current;
+        std::vector<Vec2> points;   // Polylinie
+        bool dragged = false;
+    };
+    std::optional<Create> create_;
+    void beginCreate(Vec2 p);
+    void updateCreate(Vec2 p, bool shift);
+    void commitCreate(bool clicked);
+    Polyline shapeFor(Vec2 a, Vec2 b, bool shift) const;
+    size_t drawingLayer();
+    void addToolFields(std::vector<Field>& f) const;
     std::vector<Vec2> selectionHandles() const;
     std::optional<Drag> drag_;
 

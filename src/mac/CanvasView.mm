@@ -14,6 +14,9 @@
     if ((self = [super initWithFrame:frame])) {
         _zoom = 1; _pan = NSZeroPoint;
         [self registerForDraggedTypes:@[NSPasteboardTypeFileURL]];
+        [self addTrackingArea:[[NSTrackingArea alloc] initWithRect:NSZeroRect
+            options:NSTrackingMouseMoved | NSTrackingActiveInKeyWindow | NSTrackingInVisibleRect | NSTrackingCursorUpdate
+            owner:self userInfo:nil]];
     }
     return self;
 }
@@ -150,6 +153,14 @@
         case 126: self.onKey(0, 1, shift, NO, NO); return;    // ↑
         case 53: self.onKey(0, 0, NO, YES, NO); return;       // Esc
         case 51: case 117: self.onKey(0, 0, NO, NO, YES); return;   // ⌫ und ⌦
+        case 36: case 76: if (self.onReturn && self.onReturn()) return; break;   // ↩
+        default: break;
+    }
+    // Einzelne Buchstaben ohne ⌘: Werkzeuge
+    if (!(e.modifierFlags & (NSEventModifierFlagCommand | NSEventModifierFlagControl | NSEventModifierFlagOption)) &&
+        e.charactersIgnoringModifiers.length == 1 && self.onCharacter && self.onCharacter(e.charactersIgnoringModifiers))
+        return;
+    switch (e.keyCode) {
         default: [super keyDown:e];
     }
 }
@@ -164,7 +175,28 @@
     double tol = 6.0 / std::max(0.0001, double(t.a));   // 6 Punkte auf dem Bildschirm
     self.onPointer(phase, mm.x, mm.y, tol, (e.modifierFlags & NSEventModifierFlagShift) != 0);
 }
-- (void)mouseDown:(NSEvent*)e { [self.window makeFirstResponder:self]; [self pointer:0 event:e]; }
+- (NSPoint)mmFor:(NSEvent*)e {
+    NSPoint v = [self convertPoint:e.locationInWindow fromView:nil];
+    return NSPointFromCGPoint(CGPointApplyAffineTransform(v, CGAffineTransformInvert([self transform])));
+}
+- (void)mouseDown:(NSEvent*)e {
+    [self.window makeFirstResponder:self];
+    [self pointer:0 event:e];
+    if (e.clickCount == 2 && self.onDoubleClick) { NSPoint p = [self mmFor:e]; self.onDoubleClick(p.x, p.y); }
+}
+- (void)mouseMoved:(NSEvent*)e {
+    if (self.onMove) { NSPoint p = [self mmFor:e]; self.onMove(p.x, p.y); }
+}
+- (void)cursorUpdate:(NSEvent*)e {
+    [(self.crosshair ? NSCursor.crosshairCursor : NSCursor.arrowCursor) set];
+}
+- (void)setCrosshair:(BOOL)c {
+    if (_crosshair == c) return;
+    _crosshair = c;
+    [self.window invalidateCursorRectsForView:self];
+    NSPoint m = [self convertPoint:self.window.mouseLocationOutsideOfEventStream fromView:nil];
+    if (NSPointInRect(m, self.bounds)) [(c ? NSCursor.crosshairCursor : NSCursor.arrowCursor) set];
+}
 - (void)mouseDragged:(NSEvent*)e { [self pointer:1 event:e]; }
 - (void)mouseUp:(NSEvent*)e { [self pointer:2 event:e]; }
 

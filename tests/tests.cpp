@@ -811,6 +811,94 @@ TEST(controller_combine_and_offset) {
     CHECK(c.lastMessage().find("nichts") != std::string::npos);
 }
 
+// ---------- Zeichenwerkzeuge ----------
+
+static void dragDraw(AppController& c, Tool t, Vec2 a, Vec2 b, bool shift = false) {
+    c.setTool(t);
+    c.pointerDown(a, 0.5, false);
+    c.pointerDrag(b, shift);
+    c.pointerUp();
+}
+
+TEST(draw_rect_ellipse_line) {
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    c.newDocument();
+    CHECK(c.layerRows().empty());
+    dragDraw(c, Tool::Rect, {10, 10}, {50, 30});
+    CHECK(c.layerRows().size() == 1);              // Schnittebene automatisch angelegt
+    CHECK(c.tool() == Tool::Select);               // danach zurück zur Auswahl
+    Rect r = selRect(c);
+    NEAR(r.x, 10); NEAR(r.w, 40); NEAR(r.h, 20);
+    CHECK(c.undoTitle().find("Rechteck") != std::string::npos);
+    dragDraw(c, Tool::Rect, {100, 100}, {60, 70}, true);   // rückwärts, ⇧ = Quadrat
+    r = selRect(c);
+    NEAR(r.w, 40); NEAR(r.h, 40); NEAR(r.x, 60);
+    dragDraw(c, Tool::Ellipse, {0, 200}, {100, 250});
+    r = selRect(c);
+    NEARTOL(r.w, 100, 0.01); NEARTOL(r.h, 50, 0.01);
+    dragDraw(c, Tool::Line, {200, 200}, {240, 205}, true); // ⇧ rastet waagerecht ein
+    r = selRect(c);
+    NEARTOL(r.h, 0, 1e-6);
+    c.undo();
+    CHECK(c.undoTitle().find("Ellipse") != std::string::npos);
+}
+
+TEST(draw_polygon_star_triangle_and_click) {
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    c.newDocument();
+    c.setTool(Tool::Polygon);
+    c.setNumber("toolSides", 4);
+    c.pointerDown({100, 100}, 0.5, false);
+    c.pointerDrag({100, 120});                     // Radius 20, erste Ecke oben
+    c.pointerUp();
+    Rect r = selRect(c);
+    NEARTOL(r.w, 40, 1e-6); NEARTOL(r.h, 40, 1e-6);   // Raute
+    dragDraw(c, Tool::Triangle, {200, 100}, {200, 110});
+    r = selRect(c);
+    NEARTOL(r.h, 15, 1e-6);                        // r + r/2
+    c.setTool(Tool::Star);
+    c.setNumber("toolPoints", 5);
+    c.pointerDown({300, 300}, 0.5, false);
+    c.pointerUp();                                 // Klick ohne Ziehen: Radius 10
+    r = selRect(c);
+    NEARTOL(r.y + r.h, 310, 1e-6);
+    c.setTool(Tool::Ellipse);
+    c.pointerDown({50, 350}, 0.5, false);
+    c.pointerUp();                                 // Klick: 20 mm
+    NEARTOL(selRect(c).w, 20, 0.01);
+}
+
+TEST(draw_polyline_open_closed_cancel) {
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    c.newDocument();
+    c.setTool(Tool::Polyline);
+    c.pointerDown({0, 0}, 0.5, false); c.pointerUp();
+    c.pointerMove({5, 5});
+    CHECK(c.isCreating());
+    c.pointerDown({10, 0}, 0.5, false); c.pointerUp();
+    c.pointerDown({10, 10}, 0.5, false); c.pointerUp();
+    CHECK(c.finishCreation());                     // ↩: offene Linie
+    Rect r = selRect(c);
+    NEAR(r.w, 10); NEAR(r.h, 10);
+    c.setPhase(Phase::Prepare);
+    CHECK(!c.renderList().strokes.empty());
+    c.setPhase(Phase::Design);
+    // Geschlossen durch Klick auf den Startpunkt
+    c.setTool(Tool::Polyline);
+    for (Vec2 p : std::vector<Vec2>{{100, 100}, {120, 100}, {110, 120}, {100.2, 100.2}}) { c.pointerDown(p, 0.5, false); c.pointerUp(); }
+    CHECK(!c.isCreating());
+    c.clearSelection();
+    c.pointerDown({110, 105}, 0.5, false);         // Klick ins Innere trifft: Fläche ist geschlossen
+    CHECK(c.hasSelection());
+    // Abbrechen
+    c.setTool(Tool::Polyline);
+    c.pointerDown({300, 300}, 0.5, false); c.pointerUp();
+    CHECK(c.cancelCreation());
+    CHECK(!c.isCreating());
+    CHECK(c.selectToolByKey("r") && c.tool() == Tool::Rect);
+    CHECK(!c.selectToolByKey("x"));
+}
+
 int main() {
     for (auto& [name, fn] : tests) {
         int before = failures;

@@ -40,6 +40,7 @@ add_library(macburn_core STATIC
   src/core/app/AppController.cpp
   src/core/app/AppDevice.cpp
   src/core/app/AppEdit.cpp
+  src/core/app/AppDraw.cpp
   src/core/io/Xml.cpp
   src/core/io/SvgImport.cpp
   src/core/io/Project.cpp
