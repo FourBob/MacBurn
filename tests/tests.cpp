@@ -8,6 +8,7 @@
 #include "text/Font.hpp"
 #include "io/SvgImport.hpp"
 #include "job/Job.hpp"
+#include "job/MaterialTest.hpp"
 #include "profiles/Profiles.hpp"
 #include "util/Json.hpp"
 #include "util/NumberInput.hpp"
@@ -1094,6 +1095,124 @@ TEST(palette_matches_imported_names_and_creates_layers) {
     // Ebene über das Inspektor-Feld
     c.applyPaletteColor(0);                         // Auswahl (Rechteck) nach Rot
     CHECK(c.layerRows()[0].name == "Rot");
+}
+
+// ---------- Materialtest ----------
+
+TEST(material_test_plate) {
+    MaterialTestSpec spec;
+    spec.engraveSpeed = 3000; spec.powerMin = 10; spec.powerMax = 90;
+    spec.cutSpeedMax = 1000; spec.cutSpeedMin = 200;
+    auto fonts = makeSystemFontProvider();
+    auto plate = buildMaterialTest(spec, fonts.get());
+    CHECK(plate.bounds.w > 80 && plate.bounds.w < 95);
+    CHECK(plate.bounds.h > 30 && plate.bounds.h < 50);
+    // Gravur: Leistung steigt entlang x; Kontrolle halbe Geschwindigkeit mit halber Leistung
+    double lastP = -1, firstFull = -1, firstHalf = -1;
+    bool rising = true;
+    Vec2 pos{0, 0};
+    for (auto& m : plate.job.moves) {
+        if (m.kind == Move::Kind::Burn && m.speed == 3000 && m.to.x > pos.x && m.power > 15) {
+            if (m.power < lastP - 1e-9 && m.to.x > pos.x + 0.5) rising = false;
+            lastP = m.power;
+            if (firstFull < 0) firstFull = m.power;
+        }
+        if (m.kind == Move::Kind::Burn && m.speed == 1500 && firstHalf < 0) firstHalf = m.power;
+        if (m.kind == Move::Kind::Rapid) lastP = -1;
+        pos = m.to;
+    }
+    CHECK(rising);
+    CHECK(firstHalf > 0 && firstHalf < 50);
+    // Schnitt-Leiter: Geschwindigkeit sinkt entlang x
+    double lastV = 1e9;
+    bool falling = true;
+    int cutSegments = 0;
+    for (auto& m : plate.job.moves) {
+        if (m.kind == Move::Kind::Rapid) { lastV = 1e9; continue; }   // neue Linie
+        if (m.power != 100) continue;                                  // nur Schnitt-Bewegungen
+        if (m.speed > lastV + 1e-9) falling = false;
+        lastV = m.speed;
+        ++cutSegments;
+    }
+    CHECK(falling);
+    CHECK(cutSegments > 100);
+    NEAR(testEngravePower(spec, 50), 50);
+    NEAR(testCutSpeed(spec, 50), 600);
+    NEAR(testCutSpeed(spec, 100), 200);
+}
+
+TEST(power_curve) {
+    NEARTOL(powerForSpeed({{3000, 40}}, 1500), 20, 1e-9);           // gleiche Energie
+    NEARTOL(powerForSpeed({{3000, 40}, {1500, 24}}, 1500), 24, 1e-9);
+    double mid = powerForSpeed({{3000, 40}, {1500, 24}}, 2000);
+    CHECK(mid > 24 && mid < 40);
+    MachineProfile m; m.opticalPowerW = 10; m.maxSpeedMmMin = 6000;
+    MaterialProfile mat; mat.machine = "x";
+    IntentSettings e; e.speed = 3000; e.power = 40; e.powerBySpeed = {{3000, 40}};
+    mat.intents[Intent::Engrave] = e;
+    IntentSettings ov; ov.speed = 1500;
+    NEARTOL(ProfileStore::resolve(m, mat, Intent::Engrave, ov).power, 20, 1e-9);   // Leistung folgt der Kurve
+    ov.power = 33;
+    NEARTOL(ProfileStore::resolve(m, mat, Intent::Engrave, ov).power, 33, 1e-9);   // ausdrücklich gesetzt gewinnt
+}
+
+TEST(material_test_flow_saves_tested_profile) {
+    std::string userDir = tempPath("userprofiles");
+    std::filesystem::remove_all(userDir);
+    {
+        AppController c(std::string(MB_SOURCE_DIR) + "/profiles", userDir);
+        auto items = c.materialItems();
+        for (size_t i = 0; i < items.size(); ++i) if (items[i].title.find("Pappel") != std::string::npos) c.selectMaterial(int(i));
+        c.startMaterialTest(false);
+        CHECK(c.materialTestActive());
+        CHECK(c.phase() == Phase::Laser);
+        bool save = false;
+        for (auto& f : c.inspector()) if (f.key == "testSave") save = f.enabled;
+        CHECK(!save);                                  // erst nach dem Ablesen
+        c.setNumber("testReadEngrave", 40);
+        c.setNumber("testReadCut", 70);
+        for (auto& f : c.inspector()) if (f.key == "testSave") save = f.enabled;
+        CHECK(save);
+        c.pressButton("testSave");
+        CHECK(!c.materialTestActive());
+        CHECK(c.materialCard().subtitle.find("getestet") != std::string::npos);
+        CHECK(c.materialCard().title == "Pappel-Sperrholz");
+    }
+    // Datei liegt bei den Benutzerprofilen und wird beim nächsten Start geladen
+    CHECK(std::filesystem::exists(userDir + "/materials/mecpow-x3-pro/plywood-poplar-3mm.json"));
+    AppController d(std::string(MB_SOURCE_DIR) + "/profiles", userDir);
+    bool tested = false;
+    for (auto& it : d.materialItems()) if (it.title.find("Pappel") != std::string::npos) tested = it.title.rfind("✓", 0) == 0;
+    CHECK(tested);
+    // Neues Material
+    d.startMaterialTest(true);
+    d.setString("testName", "Kork");
+    d.setNumber("testThickness", 5);
+    d.setChoice("testWhat", 1);                       // nur Gravur
+    d.setNumber("testReadEngrave", 30);
+    d.pressButton("testSave");
+    CHECK(d.materialCard().title == "Kork");
+    CHECK(std::filesystem::exists(userDir + "/materials/mecpow-x3-pro/kork-5mm.json"));
+    std::filesystem::remove_all(userDir);
+}
+
+TEST(time_estimate_like_grbl_planner) {
+    // 100 mm bei 6000 mm/min (100 mm/s), Beschleunigung 500 mm/s²: 0,2 s hoch, 0,2 s runter, 80 mm in 0,8 s
+    Job one;
+    one.moves.push_back({Move::Kind::Burn, {100, 0}, 6000, 50});
+    NEARTOL(estimateSeconds(one, 6000, 500), 1.2, 1e-9);
+    Job many;   // dieselbe Linie in 100 Stücken: kein Abbremsen dazwischen
+    for (int i = 1; i <= 100; ++i) many.moves.push_back({Move::Kind::Burn, {double(i), 0}, 6000, 50});
+    NEARTOL(estimateSeconds(many, 6000, 500), 1.2, 1e-6);
+    Job back;   // hin und zurück: an der Umkehr auf 0
+    back.moves.push_back({Move::Kind::Burn, {100, 0}, 6000, 50});
+    back.moves.push_back({Move::Kind::Burn, {0, 0}, 6000, 50});
+    NEARTOL(estimateSeconds(back, 6000, 500), 2.4, 1e-9);
+    // Testplatte: ca. 3 Minuten (früher fälschlich ~16 geschätzt)
+    MaterialTestSpec spec; spec.engraveSpeed = 5000; spec.cutSpeedMax = 500; spec.cutSpeedMin = 80;
+    auto fonts = makeSystemFontProvider();
+    double t = estimateSeconds(buildMaterialTest(spec, fonts.get()).job, 3000, 500);
+    CHECK(t > 30 && t < 240);
 }
 
 int main() {

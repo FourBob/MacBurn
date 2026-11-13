@@ -39,6 +39,7 @@ int intentIndex(Intent i) {
 AppController::AppController(const std::string& systemProfiles, const std::string& userProfiles) {
     store_.loadDirectory(systemProfiles, "system");
     store_.loadDirectory(userProfiles, "user");
+    userProfilesDir_ = userProfiles;
     if (store_.machines().empty()) {
         MachineProfile fallback;
         fallback.id = "generic/grbl";
@@ -146,6 +147,10 @@ void AppController::setChoice(const std::string& key, int index) {
         jogStep_ = index; changed();
     } else if (key == "origin") {
         origin_ = index; settingsDirty_ = true; changed();
+    } else if (key == "testWhat" && test_) {
+        test_->spec.engrave = index != 2;
+        test_->spec.cut = index != 1;
+        changed();
     } else if (key == "selLayer") {
         int offset = selectionLayer() ? 0 : 1;   // „Gemischt“ steht vorne
         if (index - offset >= 0) moveSelectionToLayer(size_t(index - offset));
@@ -173,6 +178,7 @@ void AppController::setChoice(const std::string& key, int index) {
 }
 
 void AppController::setNumber(const std::string& key, double v) {
+    if (key.rfind("test", 0) == 0 && setTestNumber(key, v)) return;
     if (key == "textCap") { editText([&](TextSpec& t) { t.capHeightMm = std::max(0.1, v); }, "Schrifthöhe"); return; }
     if (key == "textSpacing") { editText([&](TextSpec& t) { t.letterSpacingMm = v; }, "Zeichenabstand"); return; }
     if (key == "textLine") { editText([&](TextSpec& t) { t.lineSpacing = std::clamp(v / 100, 0.3, 5.0); }, "Zeilenabstand"); return; }
@@ -210,6 +216,7 @@ bool AppController::setNumberText(const std::string& key, const std::string& tex
 }
 
 void AppController::setString(const std::string& key, const std::string& value) {
+    if (key == "testName" && test_) { test_->name = value; changed(); return; }
     if (key == "textContent") {
         focusText_ = false;
         editText([&](TextSpec& t) { t.text = value; }, "Text ändern");
@@ -223,6 +230,10 @@ void AppController::setToggle(const std::string& key, bool on) {
 
 void AppController::pressButton(const std::string& key) {
     if (key == "toolSelect") { setTool(Tool::Select); return; }
+    if (key == "testSave") { saveTestedMaterial(); return; }
+    if (key == "testCancel") { endMaterialTest(); return; }
+    if (key == "testFrame") { frame(); return; }
+    if (key == "materialTest") { startMaterialTest(false); return; }
     if (key == "textToPaths") { convertTextToPaths(); return; }
     if (key.rfind("textAlign:", 0) == 0) {
         int a = std::clamp(std::atoi(key.c_str() + 10), 0, 2);
@@ -488,6 +499,7 @@ std::vector<Field> AppController::inspector() const {
 
     if (phase_ == Phase::Laser) {
         addDeviceFields(f);
+        addTestFields(f);
         f.push_back({Field::Kind::Header, "", "Maschine"});
         if (m) {
             Field var{Field::Kind::Choice, "variant", "Ausführung"};
@@ -564,7 +576,8 @@ std::vector<Field> AppController::inspector() const {
 
 std::string AppController::estimateText() const {
     auto* m = machine();
-    double s = m ? estimateSeconds(job_, m->travelSpeedMmMin, m->accelerationMmS2) : estimateSeconds(job_, 3000);
+    const Job& j = test_ ? testPlate().job : job_;   // im Materialtest: Zeit der Testplatte
+    double s = m ? estimateSeconds(j, m->travelSpeedMmMin, m->accelerationMmS2) : estimateSeconds(j, 3000);
     int t = int(std::lround(s));
     char b[32];
     if (t >= 3600) std::snprintf(b, sizeof b, "%d:%02d:%02d", t / 3600, t / 60 % 60, t % 60);
@@ -594,7 +607,7 @@ std::string AppController::primaryActionTitle() const {
         case PrimaryAction::GoToLaser: return "Weiter zum Lasern";
         case PrimaryAction::Connect: return "Verbinden";
         case PrimaryAction::Connecting: return "Verbinde …";
-        case PrimaryAction::StartJob: return "Lasern …";
+        case PrimaryAction::StartJob: return test_ ? "Test lasern …" : "Lasern …";
         case PrimaryAction::Pause: return "Pause";
         case PrimaryAction::Resume: return "Fortsetzen";
         case PrimaryAction::Unlock: return "Entsperren";
@@ -610,6 +623,20 @@ RenderList AppController::renderList() const {
     if (!selection_.empty() && phase_ != Phase::Laser) {
         rl.selection = doc_.bounds(selection_);
         rl.handles = selectionHandles();
+    }
+    if (phase_ == Phase::Laser && test_) {
+        // Statt des Designs: die Testplatte am Laserkopf (ohne Verbindung bei 10/10)
+        auto plate = testPlate();
+        Vec2 off = testOffset().value_or(dev_.connected ? workPos() : Vec2{10, 10});
+        rl.strokes.clear();
+        for (auto& p : plate.preview) {
+            Stroke st{{}, p.closed, {0.48f, 0.26f, 0.13f, 1}, 1.0f, false};
+            for (auto& q : p.points) st.points.push_back(q + off);
+            rl.strokes.push_back(std::move(st));
+        }
+        rl.jobFrame = Rect{plate.bounds.x + off.x, plate.bounds.y + off.y, plate.bounds.w, plate.bounds.h};
+        if (dev_.connected) rl.head = workPos();
+        return rl;
     }
     if (phase_ == Phase::Laser) {
         if (dev_.connected) rl.head = workPos();

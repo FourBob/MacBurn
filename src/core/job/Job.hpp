@@ -43,8 +43,8 @@ private:
 Vec2 anchorPoint(const Rect& r, int anchor);
 const char* anchorName(int anchor);
 
-// Zeitschätzung mit Beschleunigung (Trapezprofil je Segment), Ergebnis in Sekunden.
-double estimateSeconds(const Job& job, double rapidSpeedMmMin, double accelMmS2 = 1000);
+// Zeitschätzung wie die GRBL-Bahnplanung (Kurvenabweichung $11, Beschleunigung), Ergebnis in Sekunden.
+double estimateSeconds(const Job& job, double rapidSpeedMmMin, double accelMmS2 = 1000, double junctionDeviationMm = 0.01);
 
 struct GcodeOptions {
     double sMax = 1000;

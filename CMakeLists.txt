@@ -36,6 +36,7 @@ add_library(macburn_core STATIC
   src/core/text/FontCoreText.cpp
   src/core/document/Document.cpp
   src/core/job/Job.cpp
+  src/core/job/MaterialTest.cpp
   src/core/device/Grbl.cpp
   src/core/device/GrblDevice.cpp
   src/core/render/RenderList.cpp
@@ -45,6 +46,7 @@ add_library(macburn_core STATIC
   src/core/app/AppDraw.cpp
   src/core/app/AppText.cpp
   src/core/app/AppColor.cpp
+  src/core/app/AppTest.cpp
   src/core/io/Xml.cpp
   src/core/io/SvgImport.cpp
   src/core/io/Project.cpp

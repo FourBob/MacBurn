@@ -61,10 +61,26 @@ IntentSettings IntentSettings::mergedWith(const IntentSettings& o) const {
     if (o.lineIntervalMm) r.lineIntervalMm = o.lineIntervalMm;
     if (o.dpi) r.dpi = o.dpi;
     if (o.airAssist) r.airAssist = o.airAssist;
+    if (!o.powerBySpeed.empty()) r.powerBySpeed = o.powerBySpeed;
     return r;
 }
 bool IntentSettings::empty() const {
     return !speed && !power && !minPower && !passes && !lineIntervalMm && !dpi && !airAssist;
+}
+
+double powerForSpeed(const std::vector<std::pair<double, double>>& curveIn, double v) {
+    auto curve = curveIn;
+    curve.erase(std::remove_if(curve.begin(), curve.end(), [](auto& p) { return p.first <= 0 || p.second <= 0; }), curve.end());
+    if (curve.empty() || v <= 0) return 0;
+    std::sort(curve.begin(), curve.end());
+    if (curve.size() == 1) return curve[0].second * v / curve[0].first;   // gleiche Energie je mm
+    // Abschnitt wählen (außerhalb: äußerster Abschnitt verlängert), in log-log linear
+    size_t i = 1;
+    while (i < curve.size() - 1 && v > curve[i].first) ++i;
+    auto [v0, p0] = curve[i - 1];
+    auto [v1, p1] = curve[i];
+    double k = std::log(p1 / p0) / std::log(v1 / v0);
+    return p0 * std::pow(v / v0, k);
 }
 
 double wattsOfPowerClass(const std::string& pc) {
@@ -118,6 +134,10 @@ IntentSettings settingsFromJson(const json::Value& v) {
     if (v.has("lineIntervalMm")) s.lineIntervalMm = v["lineIntervalMm"].asNumber();
     if (v.has("dpi")) s.dpi = v["dpi"].asNumber();
     if (v.has("airAssist")) s.airAssist = v["airAssist"].asBool();
+    for (const auto& pt : v["curve"].asArray()) {
+        const auto& a = pt.asArray();
+        if (a.size() >= 2) s.powerBySpeed.push_back({a[0].asNumber(), a[1].asNumber()});
+    }
     return s;
 }
 
@@ -146,6 +166,11 @@ json::Value settingsToJson(const IntentSettings& s) {
     if (s.lineIntervalMm) o["lineIntervalMm"] = json::Value::number(*s.lineIntervalMm);
     if (s.dpi) o["dpi"] = json::Value::number(*s.dpi);
     if (s.airAssist) o["airAssist"] = json::Value::boolean(*s.airAssist);
+    if (!s.powerBySpeed.empty()) {
+        std::vector<json::Value> pts;
+        for (auto& [sp, pw] : s.powerBySpeed) pts.push_back(json::Value::array({json::Value::number(sp), json::Value::number(pw)}));
+        o["curve"] = json::Value::array(std::move(pts));
+    }
     return json::Value::object(std::move(o));
 }
 
@@ -231,6 +256,9 @@ EffectiveSettings ProfileStore::resolve(const MachineProfile& machine, const Mat
     }
 
     IntentSettings s = base.mergedWith(overrides);
+    // Nur die Geschwindigkeit geändert und eine gemessene Kurve vorhanden: Leistung folgt der Kurve
+    if (overrides.speed && !overrides.power && !base.powerBySpeed.empty())
+        s.power = std::clamp(powerForSpeed(base.powerBySpeed, *overrides.speed), 0.0, 100.0);
     e.speed = std::min(s.speed.value_or(1000), machine.maxSpeedMmMin);
     e.power = std::clamp(s.power.value_or(0), 0.0, 100.0);
     e.minPower = std::clamp(s.minPower.value_or(0), 0.0, e.power);

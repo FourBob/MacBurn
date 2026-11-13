@@ -52,6 +52,9 @@ struct IntentSettings {
     std::optional<double> lineIntervalMm;
     std::optional<double> dpi;
     std::optional<bool> airAssist;
+    // Gemessene Leistung je Geschwindigkeit (aus dem Materialtest): [(mm/min, %), …]
+    // Wird im Projekt nur die Geschwindigkeit geändert, folgt die Leistung dieser Kurve.
+    std::vector<std::pair<double, double>> powerBySpeed;
 
     // Felder aus other überschreiben die eigenen, wo gesetzt.
     IntentSettings mergedWith(const IntentSettings& other) const;
@@ -84,6 +87,8 @@ struct EffectiveSettings {
 };
 
 double wattsOfPowerClass(const std::string& powerClass);
+// Leistung für eine Geschwindigkeit aus der Kurve (log-log interpoliert; ein Punkt = gleiche Energie)
+double powerForSpeed(const std::vector<std::pair<double, double>>& curve, double speed);
 
 // Für Projektdateien und Benutzerprofile
 MaterialProfile materialFromJson(const json::Value& v, const std::string& source);

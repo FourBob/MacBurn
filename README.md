@@ -129,6 +129,21 @@ Sichern. *In Pfade umwandeln* macht daraus normale Formen; beim Kombinieren gesc
 - **Gruppieren** und **Gruppierung aufheben** – importierte SVGs zerfallen in ihre ursprünglichen Elemente.
 - Alles lässt sich widerrufen.
 
+### Materialtest
+
+*Laser › Material testen …* (oder in der Materialauswahl *Dieses Material testen …* / *Neues Material testen …*).
+Statt eines Rasters aus Kästchen brennt MacBurn eine kleine Testplatte (ca. 83 × 31 mm, gut 3 Minuten):
+
+- **Gravurstreifen:** Leistung steigt stufenlos (z. B. 5 → 100 %), darunter eine Skala 0–100.
+- **Kontrollstreifen:** halbe Geschwindigkeit bei gleicher Energie – sieht er an derselben Stelle gleich aus,
+  stimmt die Umrechnung; sonst die Stelle als Kontroll-Wert eintragen.
+- **Schnitt-Leiter:** schmaler Streifen, Geschwindigkeit sinkt stufenlos; wo er herausfällt, schneidet es durch.
+
+Ablauf: Kopf über eine freie Stelle fahren (linke untere Ecke der Platte), *Rahmen abfahren*, *Test lasern …*,
+dann die Skalenwerte ablesen und eintragen. *Als Material speichern* legt ein Profil **✓ getestet** für diese
+Maschine an (Schneiden mit 15 % Reserve). Das Profil enthält eine Leistungskurve: Wird im Projekt nur die
+Geschwindigkeit geändert, passt MacBurn die Leistung so an, dass die Gravur gleich dunkel bleibt.
+
 ### Lasern
 
 1. Laser per USB anschließen, einschalten (Netzteil an, Not-Aus gelöst), *Laser › Verbinden* (⌘K).
@@ -140,6 +155,7 @@ Sichern. *In Pfade umwandeln* macht daraus normale Formen; beim Kombinieren gesc
 4. *Lasern …* → Startprüfung abhaken (Fokus, Luftpumpe, Schutzbrille, Aufsicht) → *Starten*.
 5. **Esc** oder **⌘.** stoppt sofort: Die Steuerung wird zurückgesetzt, der Laser ist aus.
 
+Die Zeitschätzung bildet die Bahnplanung von GRBL nach (Beschleunigung, Kurvenabweichung).
 Leerfahrten und Rahmen laufen mit einer schonenden Fahrgeschwindigkeit aus dem Maschinenprofil
 (X3 Pro: 3000 mm/min), weil der Eilgang im Test Schritte verloren hat.
 

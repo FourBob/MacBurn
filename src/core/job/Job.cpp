@@ -132,18 +132,47 @@ const char* anchorName(int anchor) {
     return names[std::clamp(anchor, 0, 8)];
 }
 
-double estimateSeconds(const Job& job, double rapidSpeedMmMin, double accel) {
-    double t = 0;
+double estimateSeconds(const Job& job, double rapidSpeedMmMin, double accel, double junctionDeviation) {
+    // Nachbildung der GRBL-Bahnplanung: Kurvengeschwindigkeit aus der Kurvenabweichung ($11),
+    // dann Vorwärts- (Beschleunigen) und Rückwärtsdurchgang (Bremsen), Zeit je Abschnitt als Trapez.
+    struct Seg { Vec2 dir; double len, vmax, entry = 0; };
+    std::vector<Seg> segs;
     Vec2 pos{0, 0};
     for (const auto& m : job.moves) {
-        double d = (m.to - pos).length();
+        Vec2 d = m.to - pos;
+        double len = d.length();
         pos = m.to;
-        if (d <= 0) continue;
         double v = (m.kind == Move::Kind::Rapid ? rapidSpeedMmMin : m.speed) / 60.0;
-        if (v <= 0) continue;
-        // Beschleunigen und Bremsen: Trapez oder Dreieck.
-        double dAcc = v * v / accel;
-        t += d >= dAcc ? d / v + v / accel : 2.0 * std::sqrt(d / accel);
+        if (len < 1e-9 || v <= 0) continue;
+        segs.push_back({d * (1.0 / len), len, v});
+    }
+    if (segs.empty() || accel <= 0) return 0;
+    // Höchste Einfahrgeschwindigkeit an jeder Ecke
+    std::vector<double> vj(segs.size() + 1, 0.0);   // vj[i] = Geschwindigkeit am Anfang von segs[i]; Ende = 0
+    for (size_t i = 1; i < segs.size(); ++i) {
+        double cosT = -(segs[i - 1].dir.x * segs[i].dir.x + segs[i - 1].dir.y * segs[i].dir.y);   // Winkel zwischen Richtungen
+        double limit = std::min(segs[i - 1].vmax, segs[i].vmax);
+        if (cosT < -0.999999) { vj[i] = limit; continue; }        // gerade weiter
+        if (cosT > 0.999999) { vj[i] = 0; continue; }             // Umkehr
+        double sinHalf = std::sqrt(0.5 * (1 - cosT));
+        double v = std::sqrt(accel * junctionDeviation * sinHalf / (1 - sinHalf));
+        vj[i] = std::min(v, limit);
+    }
+    // Rückwärts: rechtzeitig bremsen können
+    for (size_t i = segs.size(); i-- > 0;) vj[i] = std::min(vj[i], std::sqrt(vj[i + 1] * vj[i + 1] + 2 * accel * segs[i].len));
+    // Vorwärts: nur so schnell, wie beschleunigt werden kann
+    for (size_t i = 0; i < segs.size(); ++i) vj[i + 1] = std::min(vj[i + 1], std::sqrt(vj[i] * vj[i] + 2 * accel * segs[i].len));
+    double t = 0;
+    for (size_t i = 0; i < segs.size(); ++i) {
+        double v0 = vj[i], v1 = vj[i + 1], vm = segs[i].vmax, L = segs[i].len;
+        double dAcc = (vm * vm - v0 * v0) / (2 * accel), dDec = (vm * vm - v1 * v1) / (2 * accel);
+        if (dAcc + dDec <= L) {
+            t += (vm - v0) / accel + (vm - v1) / accel + (L - dAcc - dDec) / vm;
+        } else {
+            // Dreieck: Spitzengeschwindigkeit wird nicht erreicht
+            double vp = std::sqrt((2 * accel * L + v0 * v0 + v1 * v1) / 2);
+            t += (vp - v0) / accel + (vp - v1) / accel;
+        }
     }
     return t;
 }

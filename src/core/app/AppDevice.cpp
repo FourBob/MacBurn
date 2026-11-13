@@ -135,6 +135,22 @@ void AppController::unlock() {
 
 void AppController::frame() {
     if (!deviceIdle()) return;
+    if (test_) {
+        auto off = testOffset();
+        if (!off) { message_ = "Von hier aus ragt die Testplatte über die Arbeitsfläche."; changed(); return; }
+        Rect b = testPlate().bounds;
+        double x0 = b.x + off->x, y0 = b.y + off->y, x1 = x0 + b.w, y1 = y0 + b.h;
+        Vec2 back = workPos();
+        std::string feed = " F" + f3(machine() ? machine()->travelSpeedMmMin : 3000) + " S0";
+        for (const auto& l : std::vector<std::string>{"M5", "G90",
+                 "G1 X" + f3(x0) + " Y" + f3(y0) + feed, "G1 X" + f3(x1) + " Y" + f3(y0) + feed,
+                 "G1 X" + f3(x1) + " Y" + f3(y1) + feed, "G1 X" + f3(x0) + " Y" + f3(y1) + feed,
+                 "G1 X" + f3(x0) + " Y" + f3(y0) + feed, "G1 X" + f3(back.x) + " Y" + f3(back.y) + feed})
+            device_->sendLine(l);
+        message_ = "Rahmen der Testplatte wird abgefahren (Laser aus).";
+        changed();
+        return;
+    }
     auto off = offsetFor();
     if (!off) {
         message_ = origin_ == 1 ? "Von dieser Kopfposition aus ragt das Design über die Arbeitsfläche. Kopf verschieben oder anderen Anker wählen."
@@ -159,7 +175,16 @@ void AppController::frame() {
 std::vector<PreflightCheck> AppController::preflight() const {
     std::vector<PreflightCheck> c;
     auto* m = machine();
-    auto off = offsetFor();
+    auto off = test_ ? testOffset() : offsetFor();
+    if (test_) {
+        c.push_back({"Testplatte liegt auf der Arbeitsfläche", off ? "Linke untere Ecke am Laserkopf." : "Kopf verschieben.", true, bool(off)});
+        c.push_back({"Laser bereit", deviceIdle() ? "Verbunden" : "Nicht bereit: " + grbl::describeState(dev_.state), true, deviceIdle()});
+        c.push_back({"Fokus eingestellt", m && !m->focusHint.empty() ? m->focusHint : "Laser auf die Materialoberfläche fokussieren.", false});
+        if (m && !m->airAssistControllable) c.push_back({"Luftpumpe eingeschaltet", "Wird an der Pumpe geschaltet.", false});
+        c.push_back({"Schutzbrille auf oder Abdeckung geschlossen", "Auch reflektiertes Laserlicht schädigt die Augen.", false});
+        c.push_back({"Ich bleibe während des Tests beim Gerät", "Der Schnittstreifen kann sich lösen.", false});
+        return c;
+    }
     c.push_back({"Design liegt auf der Arbeitsfläche",
                  off ? (origin_ == 0 ? std::string("Position: wie auf der Fläche")
                                      : std::string("Position: am Laserkopf, Anker ") + anchorName(anchor_))
@@ -189,6 +214,25 @@ std::vector<PreflightCheck> AppController::preflight() const {
 
 void AppController::startJob() {
     if (!deviceIdle()) return;
+    if (test_) {
+        auto off = testOffset();
+        auto* m = machine();
+        if (!off || !m) return;
+        GcodeOptions o;
+        o.sMax = m->sMax;
+        o.airAssistGcode = m->airAssistControllable;
+        o.offset = *off;
+        o.travelSpeed = m->travelSpeedMmMin;
+        std::vector<std::string> lines;
+        std::istringstream in(writeGcode(testPlate().job, o));
+        for (std::string l; std::getline(in, l);) lines.push_back(l);
+        device_->startJob(std::move(lines));
+        dev_.jobRunning = true;
+        dev_.done = dev_.total = 0;
+        message_ = "Materialtest läuft.";
+        changed();
+        return;
+    }
     auto off = offsetFor();
     auto* m = machine();
     if (!off || !m || !material()) return;
@@ -281,6 +325,7 @@ void AppController::handleDevice(const grbl::DeviceEvent& e) {
         }
         case K::JobFinished:
             dev_.jobRunning = false;
+            if (test_) { test_->ran = true; message_ = "Test fertig. Jetzt die Skalen ablesen und unten eintragen."; break; }
             message_ = "Auftrag fertig.";
             break;
         case K::JobAborted:
@@ -314,6 +359,7 @@ void AppController::addDeviceFields(std::vector<Field>& f) const {
         f.push_back(d);
     }
     if (!dev_.connected) {
+        if (test_) return;   // Materialtest hat eigene Felder
         f.push_back({Field::Kind::Header, "", "Auftrag"});
         f.push_back({Field::Kind::Info, "", "Geschätzte Laufzeit: " + estimateText()});
         return;
@@ -339,6 +385,7 @@ void AppController::addDeviceFields(std::vector<Field>& f) const {
     f.push_back(h);
     if (alarm) f.push_back({Field::Kind::Button, "unlock", "Entsperren ohne Referenzfahrt"});
 
+    if (test_) return;   // Materialtest hat eigene Felder
     f.push_back({Field::Kind::Header, "", "Auftrag"});
     Field origin{Field::Kind::Choice, "origin", "Position", {"Wie auf der Fläche", "Am Laserkopf"}};
     origin.selected = origin_;

@@ -324,7 +324,11 @@ static NSTextField* small(NSString* s, BOOL secondary) {
 
 - (void)phaseChanged:(NSSegmentedControl*)s { _core->setPhase(mb::Phase(s.selectedSegment)); }
 - (void)machineChanged:(NSPopUpButton*)p { _core->selectMachine(int(p.indexOfSelectedItem)); }
-- (void)materialChanged:(NSPopUpButton*)p { _core->selectMaterial(int(p.selectedItem.tag)); }
+- (void)materialChanged:(NSPopUpButton*)p {
+    NSInteger tag = p.selectedItem.tag;
+    if (tag < 0) { _core->startMaterialTest(tag == -2); return; }   // Auswahl springt beim Neuaufbau zurück
+    _core->selectMaterial(int(tag));
+}
 - (void)primaryPressed:(id)sender {
     switch (_core->primaryAction()) {
         case mb::PrimaryAction::GoToLaser: _core->setPhase(mb::Phase::Laser); break;
@@ -567,6 +571,14 @@ static NSTextField* small(NSString* s, BOOL secondary) {
         [_materialPopup.menu addItem:mi];
         if (i.selected) [_materialPopup selectItem:mi];
     }
+    // Materialtest direkt aus der Materialauswahl
+    [_materialPopup.menu addItem:NSMenuItem.separatorItem];
+    NSMenuItem* testThis = [[NSMenuItem alloc] initWithTitle:@"Dieses Material testen …" action:nil keyEquivalent:@""];
+    testThis.tag = -1;
+    [_materialPopup.menu addItem:testThis];
+    NSMenuItem* testNew = [[NSMenuItem alloc] initWithTitle:@"Neues Material testen …" action:nil keyEquivalent:@""];
+    testNew.tag = -2;
+    [_materialPopup.menu addItem:testNew];
     _materialSub.stringValue = NS(matc.subtitle);
     _materialSub.textColor = matc.subtitle.find("✓") != std::string::npos ? NSColor.systemGreenColor
                            : matc.subtitle.find("◇") != std::string::npos ? NSColor.systemTealColor

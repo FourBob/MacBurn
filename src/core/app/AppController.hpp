@@ -8,6 +8,7 @@
 #include "document/Document.hpp"
 #include "text/Font.hpp"
 #include "job/Job.hpp"
+#include "job/MaterialTest.hpp"
 #include "profiles/Profiles.hpp"
 #include "render/RenderList.hpp"
 
@@ -168,6 +169,12 @@ public:
     bool hasSelection() const { return !selection_.empty(); }
     bool canEdit() const { return !dev_.jobRunning; }
 
+    // --- Materialtest ---
+    // newMaterial: neues Material anlegen; sonst das gewählte Material einmessen
+    void startMaterialTest(bool newMaterial);
+    void endMaterialTest();
+    bool materialTestActive() const { return test_.has_value(); }
+
     // --- Gerät ---
     PrimaryAction primaryAction() const;
     void connect();
@@ -214,6 +221,21 @@ private:
     std::string message_;
     std::string title_ = "Beispiel";
     std::string path_;
+    std::string userProfilesDir_;
+    struct TestState {
+        MaterialTestSpec spec;
+        bool newMaterial = false;
+        std::string name, category = "Holz";
+        double thicknessMm = 3;
+        double readEngrave = -1, readControl = -1, readCut = -1;   // abgelesene Skalenwerte, -1 = noch nicht
+        bool ran = false;
+    };
+    std::optional<TestState> test_;
+    MaterialTestPlate testPlate() const;
+    std::optional<Vec2> testOffset() const;
+    void addTestFields(std::vector<Field>& f) const;
+    bool setTestNumber(const std::string& key, double v);
+    void saveTestedMaterial();
     uint64_t savedState_ = 0;
     bool settingsDirty_ = false;
     bool isSample_ = true;

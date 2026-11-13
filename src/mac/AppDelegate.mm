@@ -161,6 +161,9 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
     anchorItem.submenu = anchors;
     [laser addItem:anchorItem];
     [laser addItem:NSMenuItem.separatorItem];
+    [laser addItem:item(@"Material testen …", @selector(laserTest:), @"")];
+    [laser addItem:item(@"Neues Material testen …", @selector(laserTestNew:), @"")];
+    [laser addItem:NSMenuItem.separatorItem];
     [laser addItem:item(@"Stopp", @selector(laserStop:), @".")];
 
     NSMenu* window = [[NSMenu alloc] initWithTitle:@"Fenster"];
@@ -197,6 +200,7 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
     if (mi.action == @selector(laserDisconnect:)) return _core->deviceConnected() && !_core->jobRunning();
     if (mi.action == @selector(laserHome:) || mi.action == @selector(laserFrame:)) return _core->deviceConnected() && !_core->jobRunning();
     if (mi.action == @selector(laserStop:)) return _core->deviceConnected();
+    if (mi.action == @selector(laserTest:) || mi.action == @selector(laserTestNew:)) return !_core->jobRunning();
     if (mi.action == @selector(laserPosition:)) { mi.state = mi.tag == _core->positionMode() ? NSControlStateValueOn : NSControlStateValueOff; return !_core->jobRunning(); }
     if (mi.action == @selector(laserAnchor:)) { mi.state = mi.tag == _core->anchor() ? NSControlStateValueOn : NSControlStateValueOff; return _core->positionMode() == 1 && !_core->jobRunning(); }
     if (mi.action == @selector(showPhase:)) { mi.state = mi.tag == NSInteger(_core->phase()) ? NSControlStateValueOn : NSControlStateValueOff; }
@@ -235,6 +239,8 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
 - (void)laserHome:(id)sender { _core->home(); }
 - (void)laserFrame:(id)sender { _core->frame(); }
 - (void)laserStop:(id)sender { _core->stop(); }
+- (void)laserTest:(id)sender { _core->startMaterialTest(false); }
+- (void)laserTestNew:(id)sender { _core->startMaterialTest(true); }
 - (void)laserPosition:(NSMenuItem*)sender { _core->setChoice("origin", int(sender.tag)); }
 - (void)laserAnchor:(NSMenuItem*)sender { _core->setChoice("anchor", int(sender.tag)); }
 
