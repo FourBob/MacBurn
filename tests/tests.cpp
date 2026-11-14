@@ -1165,6 +1165,12 @@ TEST(material_test_flow_saves_tested_profile) {
         for (size_t i = 0; i < items.size(); ++i) if (items[i].title.find("Pappel") != std::string::npos) c.selectMaterial(int(i));
         c.startMaterialTest(false);
         CHECK(c.materialTestActive());
+        // Materialwechsel während des Tests: Test folgt der Auswahl
+        for (size_t i = 0; i < items.size(); ++i) if (items[i].title.find("Birke") != std::string::npos) c.selectMaterial(int(i));
+        bool birke = false;
+        for (auto& f : c.inspector()) if (f.label.find("Material: Birke") != std::string::npos) birke = true;
+        CHECK(birke);
+        for (size_t i = 0; i < items.size(); ++i) if (items[i].title.find("Pappel") != std::string::npos) c.selectMaterial(int(i));
         CHECK(c.phase() == Phase::Laser);
         bool save = false;
         for (auto& f : c.inspector()) if (f.key == "testSave") save = f.enabled;

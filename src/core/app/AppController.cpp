@@ -132,7 +132,13 @@ void AppController::selectMachine(int index) {
 }
 
 void AppController::selectVariant(int index) { variant_ = index; settingsDirty_ = true; changed(); }
-void AppController::selectMaterial(int index) { material_ = index; settingsDirty_ = true; changed(); }
+void AppController::selectMaterial(int index) {
+    material_ = index;
+    settingsDirty_ = true;
+    // Läuft ein Materialtest für das gewählte Material, mit dem neuen Material neu aufsetzen
+    if (test_ && !test_->newMaterial && !dev_.jobRunning) { startMaterialTest(false); return; }
+    changed();
+}
 void AppController::selectLayer(int index) { layer_ = index; changed(); }
 
 void AppController::setChoice(const std::string& key, int index) {
