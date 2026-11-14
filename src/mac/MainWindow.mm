@@ -345,6 +345,7 @@ static NSTextField* small(NSString* s, BOOL secondary) {
 
 - (void)showPreflight {
     auto checks = _core->preflight();
+    BOOL forTest = _core->materialTestActive();   // Starten gilt nur für diesen Auftrag
     NSPanel* sheet = [[NSPanel alloc] initWithContentRect:NSMakeRect(0, 0, 460, 100) styleMask:NSWindowStyleMaskTitled
                                                   backing:NSBackingStoreBuffered defer:NO];
     NSStackView* stack = [NSStackView stackViewWithViews:@[]];
@@ -423,7 +424,7 @@ static NSTextField* small(NSString* s, BOOL secondary) {
         MainWindow* strongSelf = weakSelf;
         if (!strongSelf) return;
         objc_setAssociatedObject(strongSelf, "preflightSheet", nil, OBJC_ASSOCIATION_RETAIN);
-        if (r == NSModalResponseOK) strongSelf->_core->startJob();
+        if (r == NSModalResponseOK) strongSelf->_core->startJob(forTest);
         (void)weakSheet;
     }];
 }

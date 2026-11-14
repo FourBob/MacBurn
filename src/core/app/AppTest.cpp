@@ -60,6 +60,7 @@ void AppController::startMaterialTest(bool newMaterial) {
         t.name = "Neues Material";
     }
     test_ = t;
+    lockedHead_.reset();
     phase_ = Phase::Laser;
     message_ = "Materialtest: Werte prüfen, Kopf auf eine freie Stelle des Materials fahren, Rahmen abfahren, dann lasern.";
     changed();
@@ -67,6 +68,7 @@ void AppController::startMaterialTest(bool newMaterial) {
 
 void AppController::endMaterialTest() {
     test_.reset();
+    lockedHead_.reset();
     message_.clear();
     changed();
 }
@@ -80,7 +82,7 @@ std::optional<Vec2> AppController::testOffset() const {
     // Linke untere Ecke der Testplatte am Laserkopf
     if (!dev_.connected) return std::nullopt;
     auto plate = testPlate();
-    Vec2 off = workPos();
+    Vec2 off = headForPlacement();
     Rect wa = workArea();
     Rect moved{plate.bounds.x + off.x, plate.bounds.y + off.y, plate.bounds.w, plate.bounds.h};
     if (!wa.contains(moved)) return std::nullopt;
@@ -146,7 +148,8 @@ void AppController::addTestFields(std::vector<Field>& f) const {
     char b[96];
     std::snprintf(b, sizeof b, "Testplatte %.0f × %.0f mm · ca. %d:%02d min", plate.bounds.w, plate.bounds.h, int(secs) / 60, int(secs) % 60);
     f.push_back({Field::Kind::Info, "", b});
-    f.push_back({Field::Kind::Info, "", "Die linke untere Ecke liegt am Laserkopf. Kopf auf eine freie Stelle fahren, Rahmen abfahren."});
+    f.push_back({Field::Kind::Info, "", lockedHead_ ? "📍 Position festgelegt (Rahmen/Test). Pfeiltasten lösen sie wieder."
+                                                  : "Die linke untere Ecke liegt am Laserkopf. Kopf auf eine freie Stelle fahren, Rahmen abfahren."});
     if (dev_.connected && !testOffset()) {
         Field w{Field::Kind::Info, "", "⚠ Von hier aus ragt die Testplatte über die Arbeitsfläche."};
         w.highlight = true;

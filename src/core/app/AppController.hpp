@@ -184,7 +184,9 @@ public:
     void unlock();
     void frame();
     std::vector<PreflightCheck> preflight() const;
-    void startJob();                    // erst nach bestätigter Startprüfung
+    // erst nach bestätigter Startprüfung; forTest = wofür die Prüfung geöffnet wurde
+    void startJob(bool forTest);
+    void startJob() { startJob(test_.has_value()); }
     void pauseOrResume();
     void stop();
     bool deviceConnected() const { return dev_.connected; }
@@ -252,6 +254,10 @@ private:
     std::vector<std::string> ports_;
     int port_ = 0, jogStep_ = 1, origin_ = 0, anchor_ = 4;   // Anker: Mitte
     Vec2 jobOffset_;
+    // Kopfposition, an der Rahmen/Auftrag festgelegt wurden. Solange gesetzt, wandert die
+    // Vorschau nicht mit dem Kopf (er fährt ja gerade die Form ab). Joggen/Referenzfahrt lösen sie.
+    std::optional<Vec2> lockedHead_;
+    Vec2 headForPlacement() const { return lockedHead_ ? *lockedHead_ : workPos(); }
 
     ObjectSet selection_;
     bool lockRatio_ = true;

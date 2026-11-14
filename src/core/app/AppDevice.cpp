@@ -52,7 +52,7 @@ std::optional<Vec2> AppController::offsetFor() const {
     Vec2 off{0, 0};
     if (origin_ == 1) {   // am Laserkopf: gewählter Ankerpunkt des Designs liegt unter dem Kopf
         if (!dev_.connected) return std::nullopt;
-        off = workPos() - anchorPoint(b, anchor_);
+        off = headForPlacement() - anchorPoint(b, anchor_);
     }
     Rect wa = workArea();
     Rect moved{b.x + off.x, b.y + off.y, b.w, b.h};
@@ -98,6 +98,7 @@ void AppController::connect() {
 }
 
 void AppController::disconnect() {
+    lockedHead_.reset();
     device_->detach();
     dev_.connected = dev_.connecting = dev_.jobRunning = false;
     changed();
@@ -105,6 +106,7 @@ void AppController::disconnect() {
 
 void AppController::jog(int dx, int dy) {
     if (!deviceIdle() && dev_.state.rfind("Jog", 0) != 0) return;
+    lockedHead_.reset();   // Kopf wird bewegt: Vorschau folgt wieder dem Kopf
     double step = kJogSteps[std::clamp(jogStep_, 0, 3)];
     Rect wa = workArea();
     Vec2 p = workPos();
@@ -121,6 +123,7 @@ void AppController::jog(int dx, int dy) {
 
 void AppController::home() {
     if (!dev_.connected || dev_.jobRunning) return;
+    lockedHead_.reset();
     message_ = "Referenzfahrt …";
     device_->sendLine("$H");
     changed();
@@ -128,6 +131,7 @@ void AppController::home() {
 
 void AppController::unlock() {
     if (!dev_.connected || dev_.jobRunning) return;
+    lockedHead_.reset();
     device_->sendLine("$X");
     message_ = "Entsperrt. Position ist erst nach einer Referenzfahrt wieder sicher.";
     changed();
@@ -138,9 +142,10 @@ void AppController::frame() {
     if (test_) {
         auto off = testOffset();
         if (!off) { message_ = "Von hier aus ragt die Testplatte über die Arbeitsfläche."; changed(); return; }
+        lockedHead_ = headForPlacement();
         Rect b = testPlate().bounds;
         double x0 = b.x + off->x, y0 = b.y + off->y, x1 = x0 + b.w, y1 = y0 + b.h;
-        Vec2 back = workPos();
+        Vec2 back = *lockedHead_;   // zurück an den Ausgangspunkt
         std::string feed = " F" + f3(machine() ? machine()->travelSpeedMmMin : 3000) + " S0";
         for (const auto& l : std::vector<std::string>{"M5", "G90",
                  "G1 X" + f3(x0) + " Y" + f3(y0) + feed, "G1 X" + f3(x1) + " Y" + f3(y0) + feed,
@@ -152,6 +157,7 @@ void AppController::frame() {
         return;
     }
     auto off = offsetFor();
+    if (off && origin_ == 1) lockedHead_ = headForPlacement();
     if (!off) {
         message_ = origin_ == 1 ? "Von dieser Kopfposition aus ragt das Design über die Arbeitsfläche. Kopf verschieben oder anderen Anker wählen."
                                 : "Das Design passt an dieser Stelle nicht auf die Arbeitsfläche.";
@@ -160,7 +166,7 @@ void AppController::frame() {
     }
     Rect b = outputBounds();
     double x0 = b.x + off->x, y0 = b.y + off->y, x1 = x0 + b.w, y1 = y0 + b.h;
-    Vec2 back = workPos();
+    Vec2 back = headForPlacement();   // zurück an den Ausgangspunkt, nicht mitten in den Rahmen
     // Laser aus (M5, S0); Fahrgeschwindigkeit aus dem Profil statt Eilgang – verhindert Schrittverluste
     std::string feed = " F" + f3(machine() ? machine()->travelSpeedMmMin : 3000) + " S0";
     std::vector<std::string> lines = {"M5", "G90",
@@ -212,12 +218,19 @@ std::vector<PreflightCheck> AppController::preflight() const {
     return c;
 }
 
-void AppController::startJob() {
+void AppController::startJob(bool forTest) {
     if (!deviceIdle()) return;
+    if (forTest != test_.has_value()) {
+        // Prüffenster gehörte zu einem anderen Auftrag (Modus inzwischen gewechselt)
+        message_ = "Die Startprüfung gehörte zu einem anderen Auftrag. Bitte erneut auf „Lasern …“ klicken.";
+        changed();
+        return;
+    }
     if (test_) {
         auto off = testOffset();
         auto* m = machine();
         if (!off || !m) return;
+        lockedHead_ = headForPlacement();
         GcodeOptions o;
         o.sMax = m->sMax;
         o.airAssistGcode = m->airAssistControllable;
@@ -237,6 +250,8 @@ void AppController::startJob() {
     auto* m = machine();
     if (!off || !m || !material()) return;
     jobOffset_ = *off;
+    Vec2 startHead = headForPlacement();
+    if (origin_ == 1) lockedHead_ = startHead;
     GcodeOptions o;
     o.sMax = m->sMax;
     o.airAssistGcode = m->airAssistControllable;
@@ -245,6 +260,8 @@ void AppController::startJob() {
     std::vector<std::string> lines;
     std::istringstream in(writeGcode(job_, o));
     for (std::string l; std::getline(in, l);) lines.push_back(l);
+    if (origin_ == 1)   // am Laserkopf: danach wieder dorthin, wo der Kopf stand
+        lines.push_back("G1 X" + f3(startHead.x) + " Y" + f3(startHead.y) + " F" + f3(m->travelSpeedMmMin) + " S0");
     device_->startJob(std::move(lines));
     dev_.jobRunning = true;
     dev_.done = 0;
@@ -392,6 +409,7 @@ void AppController::addDeviceFields(std::vector<Field>& f) const {
     origin.enabled = !dev_.jobRunning;
     f.push_back(origin);
     if (origin_ == 1) {
+        if (lockedHead_) f.push_back({Field::Kind::Info, "", "📍 Position festgelegt (Rahmen/Auftrag). Pfeiltasten lösen sie wieder."});
         Field a{Field::Kind::Anchor, "anchor", "Anker"};
         a.selected = anchor_;
         a.enabled = !dev_.jobRunning;

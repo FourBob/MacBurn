@@ -146,7 +146,7 @@ void AppController::setChoice(const std::string& key, int index) {
     } else if (key == "jogStep") {
         jogStep_ = index; changed();
     } else if (key == "origin") {
-        origin_ = index; settingsDirty_ = true; changed();
+        origin_ = index; settingsDirty_ = true; lockedHead_.reset(); changed();
     } else if (key == "testWhat" && test_) {
         test_->spec.engrave = index != 2;
         test_->spec.cut = index != 1;
@@ -173,7 +173,7 @@ void AppController::setChoice(const std::string& key, int index) {
     } else if (key == "refPoint") {
         refPoint_ = std::clamp(index, 0, 8); changed();
     } else if (key == "anchor") {
-        anchor_ = std::clamp(index, 0, 8); settingsDirty_ = true; changed();
+        anchor_ = std::clamp(index, 0, 8); settingsDirty_ = true; lockedHead_.reset(); changed();
     }
 }
 
@@ -627,7 +627,7 @@ RenderList AppController::renderList() const {
     if (phase_ == Phase::Laser && test_) {
         // Statt des Designs: die Testplatte am Laserkopf (ohne Verbindung bei 10/10)
         auto plate = testPlate();
-        Vec2 off = testOffset().value_or(dev_.connected ? workPos() : Vec2{10, 10});
+        Vec2 off = testOffset().value_or(dev_.connected ? headForPlacement() : Vec2{10, 10});
         rl.strokes.clear();
         for (auto& p : plate.preview) {
             Stroke st{{}, p.closed, {0.48f, 0.26f, 0.13f, 1}, 1.0f, false};
