@@ -54,7 +54,13 @@ void AppController::startMaterialTest(bool newMaterial) {
                 t.spec.cut = false;
             }
             auto eng = ProfileStore::resolve(*m, *mat, Intent::Engrave);
-            if (eng.possible) { t.spec.engraveSpeed = eng.speed; t.spec.lineIntervalMm = eng.lineIntervalMm; }
+            if (eng.possible) {
+                t.spec.engraveSpeed = eng.speed;
+                t.spec.lineIntervalMm = eng.lineIntervalMm;
+                // Beschriftung mit den Gravurwerten, mindestens kräftig genug zum Lesen
+                t.spec.labelSpeed = eng.speed;
+                t.spec.labelPower = std::max(eng.power, 50.0);
+            }
         }
     } else {
         t.name = "Neues Material";
@@ -161,6 +167,7 @@ void AppController::addTestFields(std::vector<Field>& f) const {
 
     // Auswertung
     f.push_back({Field::Kind::Header, "", "Auswertung"});
+    f.push_back({Field::Kind::Info, "", "Ohne lesbare Zahlen: mit dem Lineal ab dem linken Ende des Streifens messen und mm × 1,25 eintragen (z. B. 32*1,25)."});
     f.push_back({Field::Kind::Info, "", t.ran ? "Skalenwerte ablesen und eintragen (0–100)."
                                             : "Nach dem Brennen ablesen (0–100): Gravur-Wert = wo die Gravur am besten aussieht; Schnitt-Wert = ab wo der Streifen durchgetrennt ist."});
     if (s.engrave) {

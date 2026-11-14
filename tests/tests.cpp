@@ -1103,6 +1103,7 @@ TEST(material_test_plate) {
     MaterialTestSpec spec;
     spec.engraveSpeed = 3000; spec.powerMin = 10; spec.powerMax = 90;
     spec.cutSpeedMax = 1000; spec.cutSpeedMin = 200;
+    spec.labelSpeed = 4000; spec.labelPower = 60;   // Beschriftung von den Streifen unterscheidbar
     auto fonts = makeSystemFontProvider();
     auto plate = buildMaterialTest(spec, fonts.get());
     CHECK(plate.bounds.w > 80 && plate.bounds.w < 95);
@@ -1216,6 +1217,7 @@ TEST(time_estimate_like_grbl_planner) {
     NEARTOL(estimateSeconds(back, 6000, 500), 2.4, 1e-9);
     // Testplatte: ca. 3 Minuten (früher fälschlich ~16 geschätzt)
     MaterialTestSpec spec; spec.engraveSpeed = 5000; spec.cutSpeedMax = 500; spec.cutSpeedMin = 80;
+    spec.labelSpeed = 5000; spec.labelPower = 100;
     auto fonts = makeSystemFontProvider();
     double t = estimateSeconds(buildMaterialTest(spec, fonts.get()).job, 3000, 500);
     CHECK(t > 30 && t < 240);

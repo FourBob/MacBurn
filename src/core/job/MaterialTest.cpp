@@ -52,29 +52,34 @@ struct Builder {
     }
 };
 
+// Skala unterhalb eines Streifens: Striche alle 10 (lang bei 0, 50, 100), Zahlen bei 0, 50, 100.
+// Belegt y … y + 6 (Zahlen unten, Striche oben).
 void scale(Builder& bld, const MaterialTestSpec& s, const FontProvider* fonts, double y) {
-    // Striche alle 10 (lang bei 0, 50, 100), Zahlen bei 0, 20, …, 100
+    double tickSpeed = s.labelSpeed / 2;   // Striche langsamer = dunkler, damit sie sicher sichtbar sind
     for (int v = 0; v <= 100; v += 10) {
         double x = kX0 + s.lengthMm * v / 100.0;
-        double h = v % 50 == 0 ? 3 : 1.8;
-        bld.line({x, y + 3.6}, {x, y + 3.6 - h}, s.markSpeed, s.markPower);
+        double h = v % 50 == 0 ? 2.2 : 1.2;
+        bld.line({x, y + 6}, {x, y + 6 - h}, tickSpeed, s.labelPower);
     }
     if (!fonts) return;
-    for (int v = 0; v <= 100; v += 20) {
+    for (int v = 0; v <= 100; v += 50) {
         TextSpec t;
         t.text = std::to_string(v);
         t.family = "Helvetica";
         t.style = "Bold";
-        t.capHeightMm = 2;
+        t.capHeightMm = 3;
         t.align = 1;
-        t.m = Affine::translate(kX0 + s.lengthMm * v / 100.0, y - 1.2);
-        for (auto& glyph : fonts->outline(t, 0.05)) {
-            if (glyph.points.size() < 2) continue;
-            bld.rapid(glyph.points.front());
-            for (size_t i = 1; i < glyph.points.size(); ++i) bld.burn(glyph.points[i], s.markSpeed, s.markPower);
-            if (glyph.closed) bld.burn(glyph.points.front(), s.markSpeed, s.markPower);
-            bld.preview.push_back(glyph);
+        t.m = Affine::translate(kX0 + s.lengthMm * v / 100.0, y + 0.3);
+        auto glyphs = fonts->outline(t, 0.03);
+        if (glyphs.empty()) continue;
+        // Ziffern gefüllt gravieren (Löcher in 0, 6, 8 bleiben frei)
+        std::vector<const Polyline*> ptrs;
+        for (auto& g : glyphs) ptrs.push_back(&g);
+        for (auto& [a, b] : JobBuilder::scanlineFill(ptrs, 0.15)) {
+            bld.rapid(a);
+            bld.burn(b, s.labelSpeed, s.labelPower);
         }
+        for (auto& g : glyphs) bld.preview.push_back(g);
     }
 }
 
@@ -97,7 +102,7 @@ MaterialTestPlate buildMaterialTest(const MaterialTestSpec& s, const FontProvide
     if (s.cut) {
         // Skala unter der Leiter, dann der schmale Streifen (Längsseiten mit sinkender Geschwindigkeit)
         scale(bld, s, fonts, y);
-        double y0 = y + 6, y1 = y0 + 4;
+        double y0 = y + 7, y1 = y0 + 4;
         auto speed = [&](double t) { return testCutSpeed(s, t * 100); };
         auto power = [&](double) { return s.cutPower; };
         for (int pass = 0; pass < std::max(1, s.cutPasses); ++pass) {
@@ -127,7 +132,7 @@ MaterialTestPlate buildMaterialTest(const MaterialTestSpec& s, const FontProvide
             }
             bld.preview.push_back(Polyline::rectangle(kX0, ya, L, h));
         };
-        double ya = y + 5;
+        double ya = y + 7;
         fill(ya, kStripH, s.engraveSpeed, 1.0);
         // Kontrolle: gleiche Energie bei anderer Geschwindigkeit → Leistung im selben Verhältnis
         double f = std::clamp(s.controlSpeedFactor, 0.1, 1.0);

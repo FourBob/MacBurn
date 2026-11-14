@@ -24,7 +24,8 @@ struct MaterialTestSpec {
     double cutPower = 100;
     double cutSpeedMax = 1000, cutSpeedMin = 100;
     int cutPasses = 1;
-    double markPower = 15, markSpeed = 3000;   // Skalen
+    // Skala und Zahlen werden graviert (gefüllt) – mit den Gravurwerten des Materials, damit sie lesbar sind
+    double labelPower = 60, labelSpeed = 3000;
     double lengthMm = 80;
     double travelSpeed = 3000;
 };
