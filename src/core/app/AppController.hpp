@@ -224,6 +224,9 @@ private:
     std::string title_ = "Beispiel";
     std::string path_;
     std::string userProfilesDir_;
+    // Zuletzt gewählte Maschine und Material (Benutzerprofile/../settings.json)
+    void loadLastChoice();
+    void saveLastChoice() const;
     struct TestState {
         MaterialTestSpec spec;
         bool newMaterial = false;

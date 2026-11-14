@@ -255,6 +255,7 @@ void AppController::saveTestedMaterial() {
         if (c[i].material->id == p.id && c[i].status == MaterialStatus::Tested) { material_ = int(i); break; }
     test_.reset();
     settingsDirty_ = true;
+    saveLastChoice();
     message_ = "„" + p.name + "“ als getestetes Material gespeichert.";
     changed();
 }

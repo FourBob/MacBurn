@@ -4,7 +4,9 @@
 #include "util/NumberInput.hpp"
 #include "io/SvgImport.hpp"
 
+#include <filesystem>
 #include <fstream>
+#include "util/Json.hpp"
 #include <sstream>
 
 #include <algorithm>
@@ -52,6 +54,7 @@ AppController::AppController(const std::string& systemProfiles, const std::strin
         message_ = "Keine Maschinenprofile gefunden – allgemeines GRBL-Profil aktiv.";
     }
     doc_ = Document::sample();
+    loadLastChoice();
     rebuild();
     device_ = std::make_unique<grbl::GrblDevice>([this](const grbl::DeviceEvent& e) {
         // Geräte-Thread → Main-Thread
@@ -128,6 +131,7 @@ void AppController::selectMachine(int index) {
     for (size_t i = 0; i < c.size(); ++i) if (c[i].material->id == matId) { material_ = int(i); break; }
     message_.clear();
     settingsDirty_ = true;
+    saveLastChoice();
     changed();
 }
 
@@ -135,6 +139,7 @@ void AppController::selectVariant(int index) { variant_ = index; settingsDirty_ 
 void AppController::selectMaterial(int index) {
     material_ = index;
     settingsDirty_ = true;
+    saveLastChoice();
     // Läuft ein Materialtest für das gewählte Material, mit dem neuen Material neu aufsetzen
     if (test_ && !test_->newMaterial && !dev_.jobRunning) { startMaterialTest(false); return; }
     changed();
@@ -280,6 +285,29 @@ void AppController::pressButton(const std::string& key) {
             [after](Document& d) { d = after; }, [before](Document& d) { d = before; }});
         changed();
     }
+}
+
+void AppController::loadLastChoice() {
+    if (userProfilesDir_.empty()) return;
+    auto v = json::parseFile((std::filesystem::path(userProfilesDir_).parent_path() / "settings.json").string());
+    if (!v) return;
+    const auto& ms = store_.machines();
+    for (size_t i = 0; i < ms.size(); ++i) if (ms[i].id == (*v)["machine"].asString()) machine_ = int(i);
+    auto c = choices();
+    for (size_t i = 0; i < c.size(); ++i)
+        if (c[i].material->id == (*v)["material"].asString()) { material_ = int(i); if (c[i].status == MaterialStatus::Tested) break; }
+}
+
+void AppController::saveLastChoice() const {
+    if (userProfilesDir_.empty() || userProfilesDir_ == "/nonexistent") return;
+    auto* m = machine();
+    auto* mat = material();
+    std::error_code ec;
+    auto dir = std::filesystem::path(userProfilesDir_).parent_path();
+    std::filesystem::create_directories(dir, ec);
+    std::ofstream out(dir / "settings.json", std::ios::binary | std::ios::trunc);
+    out << json::write(json::Value::object({{"machine", json::Value::string(m ? m->id : "")},
+                                            {"material", json::Value::string(mat ? mat->id : "")}}));
 }
 
 bool AppController::isModified() const {
