@@ -663,8 +663,9 @@ SvgImportResult importSvg(const std::string& text, const SvgImportOptions& opt) 
         l.colorKey = a.key;
         l.name = colorName(a.key);
         l.color = toColor(a.key);
+        // Geschlossene Formen (auch gefüllte) werden geschnitten – Gravieren wählt man bewusst (Farbe Blau).
         // Sicherheit zuerst: Eine Ebene mit offenen Linien wird nie automatisch geschnitten.
-        l.intent = a.filled > 0 ? Intent::Engrave : a.open > 0 ? Intent::Mark : Intent::Cut;
+        l.intent = a.open > 0 ? Intent::Mark : Intent::Cut;
         res.layers.push_back(l);
     }
     res.shapes = std::move(ctx.shapes);

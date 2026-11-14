@@ -56,8 +56,9 @@ Wie Drucker → Filament beim 3D-Druck: Oben links wählst du die Maschine, daru
 ### SVG importieren
 
 *Ablage › Importieren …* (⌘I), Datei auf die Fläche ziehen oder im Finder *Öffnen mit › MacBurn*.
-Jede Farbe wird zu einer Ebene. Gefüllte Flächen werden graviert, geschlossene Konturen geschnitten.
-Enthält eine Farbe offene Linien, wird sie nur markiert – MacBurn schneidet nie unbeabsichtigt.
+Jede Farbe wird zu einer Ebene. Geschlossene Formen (auch gefüllte) werden **geschnitten** – Gravieren wählt man
+bewusst über die Farbe Blau. Enthält eine Farbe offene Linien, wird sie nur markiert – MacBurn schneidet nie
+unbeabsichtigt.
 Texte in SVG-Dateien bitte vorher im Zeichenprogramm in Pfade umwandeln. Beispiele: [examples/schild.svg](examples/schild.svg),
 [examples/test-30mm.svg](examples/test-30mm.svg) (kleiner Testauftrag, ca. 1:20 min).
 
@@ -187,6 +188,12 @@ im Schließknopf; vor dem Schließen fragt MacBurn nach.
 | ⌥⌘H | Referenzfahrt |
 | ⌘R | Rahmen abfahren |
 | Esc / ⌘. | Stopp (bei laufendem Auftrag), sonst Zeichnen abbrechen bzw. Auswahl aufheben |
+
+## Geräteprotokoll
+
+*Hilfe › Geräteprotokoll anzeigen* öffnet `~/Library/Logs/MacBurn/Geraet.log`: Verbinden/Trennen, Start, Ende und
+Abbruch von Aufträgen (mit Grund und Position), Alarme mit Position und aktiven Eingängen, Fehler mit der
+betroffenen G-Code-Zeile, Zustandswechsel, Rahmen, Referenzfahrt, Pause und Stopp.
 
 ## Laser auslesen
 

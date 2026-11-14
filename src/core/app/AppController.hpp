@@ -90,6 +90,10 @@ public:
     void setOnStatus(std::function<void()> cb) { onStatus_ = std::move(cb); }
     // Führt eine Funktion auf dem Main-Thread aus (Cocoa: dispatch_async).
     void setMainQueue(std::function<void(std::function<void()>)> q) { mainQueue_ = std::move(q); }
+    // Geräteprotokoll: Verbindung, Aufträge, Alarme, Fehler, Zustandswechsel (Datei wird angelegt)
+    void setLogFile(const std::string& path) { logPath_ = path; }
+    const std::string& logFile() const { return logPath_; }
+    void log(const std::string& line) const;
 
     // --- Befehle ---
     void setPhase(Phase p);
@@ -224,6 +228,8 @@ private:
     std::string title_ = "Beispiel";
     std::string path_;
     std::string userProfilesDir_;
+    std::string logPath_;
+    std::string lastPins_;
     // Zuletzt gewählte Maschine und Material (Benutzerprofile/../settings.json)
     void loadLastChoice();
     void saveLastChoice() const;

@@ -236,7 +236,7 @@ TEST(svg_transforms_and_styles) {
     CHECK(r.layers.size() == 2);
     size_t cut = r.layers[0].colorKey == "#ff0000" ? 0 : 1;
     CHECK(r.layers[cut].intent == Intent::Cut);
-    CHECK(r.layers[1 - cut].intent == Intent::Engrave);
+    CHECK(r.layers[1 - cut].intent == Intent::Cut);   // gefüllte Fläche: ebenfalls Schneiden (Gravieren bewusst wählen)
     Rect b = boundsOf(r, cut);
     NEAR(b.x, 10); NEAR(b.w, 20); NEAR(b.h, 10);
     NEAR(b.y, 100 - 20 - 10);
@@ -1221,6 +1221,20 @@ TEST(time_estimate_like_grbl_planner) {
     auto fonts = makeSystemFontProvider();
     double t = estimateSeconds(buildMaterialTest(spec, fonts.get()).job, 3000, 500);
     CHECK(t > 30 && t < 240);
+}
+
+TEST(device_log_file) {
+    std::string file = tempPath("log/Geraet.log");
+    std::filesystem::remove_all(std::filesystem::path(file).parent_path());
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    c.setLogFile(file);
+    c.log("ALARM 1 · Test");
+    c.log("AUFTRAG FERTIG");
+    std::ifstream in(file);
+    std::stringstream ss; ss << in.rdbuf();
+    CHECK(ss.str().find("ALARM 1 · Test") != std::string::npos);
+    CHECK(ss.str().find("AUFTRAG FERTIG") != std::string::npos);
+    std::filesystem::remove_all(std::filesystem::path(file).parent_path());
 }
 
 int main() {

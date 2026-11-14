@@ -5,6 +5,9 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <ctime>
+#include <filesystem>
+#include <fstream>
 #include <sstream>
 
 namespace mb {
@@ -21,6 +24,28 @@ std::string f3(double v) {
 }
 
 } // namespace
+
+void AppController::log(const std::string& line) const {
+    if (logPath_.empty()) return;
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    fs::create_directories(fs::path(logPath_).parent_path(), ec);
+    if (fs::exists(logPath_, ec) && fs::file_size(logPath_, ec) > 2'000'000)   // alte Hälfte wegräumen
+        fs::rename(logPath_, logPath_ + ".1", ec);
+    std::ofstream out(logPath_, std::ios::app);
+    std::time_t now = std::time(nullptr);
+    char ts[32];
+    std::strftime(ts, sizeof ts, "%Y-%m-%d %H:%M:%S", std::localtime(&now));
+    out << ts << "  " << line << "\n";
+}
+
+namespace {
+std::string posText(Vec2 p) {
+    char b[64];
+    std::snprintf(b, sizeof b, "X %.2f Y %.2f", p.x, p.y);
+    return b;
+}
+}
 
 AppController::~AppController() {
     device_.reset();   // Thread beenden, bevor die übrigen Mitglieder verschwinden
@@ -124,6 +149,7 @@ void AppController::jog(int dx, int dy) {
 void AppController::home() {
     if (!dev_.connected || dev_.jobRunning) return;
     lockedHead_.reset();
+    log("REFERENZFAHRT");
     message_ = "Referenzfahrt …";
     device_->sendLine("$H");
     changed();
@@ -174,6 +200,7 @@ void AppController::frame() {
         "G1 X" + f3(x1) + " Y" + f3(y1) + feed, "G1 X" + f3(x0) + " Y" + f3(y1) + feed,
         "G1 X" + f3(x0) + " Y" + f3(y0) + feed, "G1 X" + f3(back.x) + " Y" + f3(back.y) + feed};
     for (auto& l : lines) device_->sendLine(l);   // Laser bleibt aus
+    log("RAHMEN " + posText(Vec2{x0, y0}) + " bis " + posText(Vec2{x1, y1}));
     message_ = "Rahmen wird abgefahren (Laser aus).";
     changed();
 }
@@ -239,6 +266,7 @@ void AppController::startJob(bool forTest) {
         std::vector<std::string> lines;
         std::istringstream in(writeGcode(testPlate().job, o));
         for (std::string l; std::getline(in, l);) lines.push_back(l);
+        log("MATERIALTEST START · " + test_->name + " · " + std::to_string(lines.size()) + " Zeilen · " + posText(*off));
         device_->startJob(std::move(lines));
         dev_.jobRunning = true;
         dev_.done = dev_.total = 0;
@@ -262,6 +290,19 @@ void AppController::startJob(bool forTest) {
     for (std::string l; std::getline(in, l);) lines.push_back(l);
     if (origin_ == 1)   // am Laserkopf: danach wieder dorthin, wo der Kopf stand
         lines.push_back("G1 X" + f3(startHead.x) + " Y" + f3(startHead.y) + " F" + f3(m->travelSpeedMmMin) + " S0");
+    {
+        std::string layers;
+        for (const auto& l : doc_.layers) {
+            if (!l.output) continue;
+            auto st = ProfileStore::resolve(*m, *material(), l.intent, l.overrides);
+            char b[160];
+            std::snprintf(b, sizeof b, "%s%s=%s %.0f mm/min %.0f %% ×%d", layers.empty() ? "" : ", ", l.name.c_str(),
+                          intentLabel(l.intent), st.speed, st.power, st.passes);
+            layers += b;
+        }
+        log("AUFTRAG START „" + title_ + "“ · " + std::to_string(lines.size()) + " Zeilen · Material " + material()->name +
+            " · Position " + (origin_ == 1 ? "am Laserkopf " + posText(startHead) : std::string("wie auf der Fläche")) + " · " + layers);
+    }
     device_->startJob(std::move(lines));
     dev_.jobRunning = true;
     dev_.done = 0;
@@ -273,12 +314,14 @@ void AppController::startJob(bool forTest) {
 void AppController::pauseOrResume() {
     if (!dev_.jobRunning) return;
     bool held = dev_.state.rfind("Hold", 0) == 0;
+    log(held ? "FORTSETZEN" : "PAUSE");
     device_->realtime(held ? grbl::GrblDevice::kResume : grbl::GrblDevice::kFeedHold);
     message_ = held ? "Fortgesetzt." : "Angehalten. Der Laser ist aus, solange pausiert.";
     changed();
 }
 
 void AppController::stop() {
+    log(dev_.jobRunning ? "STOPP durch Benutzer" : "STOPP (Joggen abbrechen)");
     if (dev_.jobRunning) device_->abortJob("Vom Benutzer gestoppt.");
     else if (dev_.connected) device_->realtime(grbl::GrblDevice::kJogCancel);
 }
@@ -292,17 +335,25 @@ void AppController::handleDevice(const grbl::DeviceEvent& e) {
             dev_.connecting = false;
             dev_.connected = true;
             message_ = "Verbunden mit " + dev_.port;
+            log("VERBUNDEN " + dev_.port + " · Zustand " + e.status.state + " · " + posText(e.status.machinePos) +
+                (e.status.pins.empty() ? "" : " · Eingänge " + e.status.pins));
             [[fallthrough]];
         case K::Status: {
             bool stateChanged = dev_.state != e.status.state;
             if (e.status.workOffset) dev_.wco = *e.status.workOffset;
             dev_.machinePos = e.status.workPosReported ? e.status.machinePos + dev_.wco : e.status.machinePos;
+            if (stateChanged || e.status.pins != lastPins_)
+                log("ZUSTAND " + e.status.state + " · " + posText(workPos()) +
+                    (e.status.pins.empty() ? "" : " · Eingänge " + e.status.pins) +
+                    (dev_.jobRunning ? " · Auftrag " + std::to_string(dev_.done) + "/" + std::to_string(dev_.total) : ""));
+            lastPins_ = e.status.pins;
             dev_.state = e.status.state;
             if (stateChanged || e.kind == K::Connected) changed();
             else if (onStatus_) onStatus_();
             return;
         }
         case K::Disconnected:
+            log("GETRENNT" + (e.text.empty() ? std::string() : " · " + e.text));
             dev_.connected = dev_.connecting = dev_.jobRunning = false;
             if (!e.text.empty()) message_ = e.text;
             else message_ = "Getrennt.";
@@ -320,13 +371,18 @@ void AppController::handleDevice(const grbl::DeviceEvent& e) {
             dev_.settings[e.code] = e.value;
             return;   // kein Neuaufbau nötig
         case K::Alarm:
+            log("ALARM " + std::to_string(e.code) + " · " + e.text + " · " + posText(workPos()) +
+                (lastPins_.empty() ? "" : " · Eingänge " + lastPins_) +
+                (dev_.jobRunning ? " · Auftrag " + std::to_string(dev_.done) + "/" + std::to_string(dev_.total) : ""));
             dev_.lastProblem = e.text;
             message_ = "Alarm: " + e.text;
             break;
         case K::Error:
+            log("FEHLER " + std::to_string(e.code) + " · " + grbl::describeError(e.code) + " · Zeile: " + e.text);
             message_ = grbl::describeError(e.code);
             break;
         case K::Message:
+            log("MELDUNG " + e.text);
             // Startmeldungen der Steuerung (Board, WLAN-Daten) gehören nicht in die Statusleiste.
             if (e.text.find("Caution: Unlocked") != std::string::npos || e.text.rfind("Using machine", 0) == 0 ||
                 e.text.rfind("Mode=", 0) == 0) return;
@@ -338,14 +394,18 @@ void AppController::handleDevice(const grbl::DeviceEvent& e) {
             dev_.total = e.total;
             size_t pct = dev_.total ? dev_.done * 100 / dev_.total : 0;
             if (pct == oldPct) return;   // nur bei vollem Prozent neu aufbauen
+            if (pct / 10 != oldPct / 10) log("FORTSCHRITT " + std::to_string(pct) + " % · " + posText(workPos()));
             break;
         }
         case K::JobFinished:
+            log("AUFTRAG FERTIG");
             dev_.jobRunning = false;
             if (test_) { test_->ran = true; message_ = "Test fertig. Jetzt die Skalen ablesen und unten eintragen."; break; }
             message_ = "Auftrag fertig.";
             break;
         case K::JobAborted:
+            log("AUFTRAG ABGEBROCHEN · " + e.text + " · " + posText(workPos()) + " · nach " + std::to_string(dev_.done) +
+                "/" + std::to_string(dev_.total) + " Zeilen");
             dev_.jobRunning = false;
             message_ = "Auftrag abgebrochen: " + e.text + " Laser ist aus. Vor dem nächsten Auftrag bitte eine Referenzfahrt machen.";
             break;

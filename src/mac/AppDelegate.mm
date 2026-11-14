@@ -19,6 +19,8 @@
     NSURL* support = [NSFileManager.defaultManager URLsForDirectory:NSApplicationSupportDirectory inDomains:NSUserDomainMask].firstObject;
     NSString* user = [[support.path stringByAppendingPathComponent:@"MacBurn"] stringByAppendingPathComponent:@"profiles"];
     _core = std::make_unique<mb::AppController>(STD(system), STD(user));
+    NSString* logs = [NSHomeDirectory() stringByAppendingPathComponent:@"Library/Logs/MacBurn/Geraet.log"];
+    _core->setLogFile(STD(logs));
 
     [self buildMenu];
     _window = [[MainWindow alloc] initWithCore:_core.get()];
@@ -166,11 +168,15 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
     [laser addItem:NSMenuItem.separatorItem];
     [laser addItem:item(@"Stopp", @selector(laserStop:), @".")];
 
+    NSMenu* help = [[NSMenu alloc] initWithTitle:@"Hilfe"];
+    [help addItem:item(@"Geräteprotokoll anzeigen", @selector(showDeviceLog:), @"")];
+    NSApp.helpMenu = help;
+
     NSMenu* window = [[NSMenu alloc] initWithTitle:@"Fenster"];
     [window addItem:item(@"Im Dock ablegen", @selector(performMiniaturize:), @"m")];
     NSApp.windowsMenu = window;
 
-    for (NSMenu* m in @[app, file, edit, object, view, laser, window]) {
+    for (NSMenu* m in @[app, file, edit, object, view, laser, window, help]) {
         NSMenuItem* top = [[NSMenuItem alloc] initWithTitle:m.title action:nil keyEquivalent:@""];
         top.submenu = m;
         [bar addItem:top];
@@ -239,6 +245,18 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
 - (void)laserHome:(id)sender { _core->home(); }
 - (void)laserFrame:(id)sender { _core->frame(); }
 - (void)laserStop:(id)sender { _core->stop(); }
+- (void)showDeviceLog:(id)sender {
+    NSString* path = NS(_core->logFile());
+    if (![NSFileManager.defaultManager fileExistsAtPath:path]) {
+        NSAlert* a = [[NSAlert alloc] init];
+        a.messageText = @"Noch kein Geräteprotokoll";
+        a.informativeText = @"Es entsteht, sobald MacBurn mit einem Laser verbunden war.";
+        [a runModal];
+        return;
+    }
+    [NSWorkspace.sharedWorkspace openURL:[NSURL fileURLWithPath:path]];   // öffnet in der Konsole
+}
+
 - (void)laserTest:(id)sender { _core->startMaterialTest(false); }
 - (void)laserTestNew:(id)sender { _core->startMaterialTest(true); }
 - (void)laserPosition:(NSMenuItem*)sender { _core->setChoice("origin", int(sender.tag)); }
