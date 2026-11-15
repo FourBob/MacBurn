@@ -187,6 +187,7 @@ im Schließknopf; vor dem Schließen fragt MacBurn nach.
 | ⌘K / ⇧⌘K | Laser verbinden / trennen |
 | ⌥⌘H | Referenzfahrt |
 | ⌘R | Rahmen abfahren |
+| ⌥⌘L | Verbindungsverlauf |
 | Esc / ⌘. | Stopp (bei laufendem Auftrag), sonst Zeichnen abbrechen bzw. Auswahl aufheben |
 
 ## Geräteprotokoll
@@ -194,6 +195,19 @@ im Schließknopf; vor dem Schließen fragt MacBurn nach.
 *Hilfe › Geräteprotokoll anzeigen* öffnet `~/Library/Logs/MacBurn/Geraet.log`: Verbinden/Trennen, Start, Ende und
 Abbruch von Aufträgen (mit Grund und Position), Alarme mit Position und aktiven Eingängen, Fehler mit der
 betroffenen G-Code-Zeile, Zustandswechsel, Rahmen, Referenzfahrt, Pause und Stopp.
+
+Bleibt die Steuerung still, warnt MacBurn nach 5 Sekunden und schreibt die zuletzt gesendeten und empfangenen
+Zeilen ins Protokoll – dazu, ob der USB-Anschluss noch da ist. Während eines Auftrags wartet MacBurn bis zu
+20 Sekunden; antwortet der Laser wieder, läuft der Auftrag weiter. Startet die Steuerung mitten im Auftrag neu
+(z. B. Spannungseinbruch), bricht MacBurn mit dieser Meldung ab.
+
+## Verbindungsverlauf
+
+*Laser › Verbindungsverlauf* (⌥⌘L) zeigt live, was zwischen MacBurn und dem Laser hin- und hergeht:
+→ an den Laser (blau), ← vom Laser, Fehler und Alarme rot. Die Statusabfragen (fünfmal pro Sekunde) sind
+ausgeblendet und lassen sich einblenden. Unten lassen sich Befehle von Hand senden (z. B. `$$`, `$I`, `$X`);
+Pfeil hoch/runter holt frühere Befehle zurück. Während eines Auftrags gehen nur `!` (anhalten), `~`
+(fortsetzen) und `?`. Das Fenster hält die letzten 5000 Zeilen; geschlossen kostet es nichts.
 
 ## Laser auslesen
 

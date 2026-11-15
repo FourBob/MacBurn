@@ -457,6 +457,38 @@ TEST(device_unexpected_restart_aborts_job) {
     dev.detach();
 }
 
+TEST(device_traffic_is_recorded) {
+    EventLog log;
+    auto fake = std::make_unique<FakeGrbl>();
+    grbl::GrblDevice dev([&](const grbl::DeviceEvent& e) { log.add(e); }, 120);
+    dev.attach(std::move(fake), 0);
+    CHECK(log.waitFor(grbl::DeviceEvent::Kind::Connected));
+    dev.sendLine("$X");
+    bool sent = false, okSeen = false, status = false;
+    uint64_t last = 0;
+    for (int i = 0; i < 400 && !(sent && okSeen && status); ++i) {
+        for (auto& t : dev.trafficSince(last)) {
+            CHECK(t.seq > last);
+            last = t.seq;
+            if (t.outgoing && t.text == "$X") sent = true;
+            if (!t.outgoing && t.text == "ok") okSeen = true;
+            if (t.status) status = true;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    CHECK(sent); CHECK(okSeen); CHECK(status);
+    CHECK(dev.trafficSince(last).size() < 50);   // nur Neues
+    dev.clearTraffic();
+    CHECK(dev.trafficSince(0).size() < 5);
+    dev.detach();
+}
+
+TEST(manual_command_needs_connection) {
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    CHECK(!c.sendManualCommand("$$").empty());   // nicht verbunden
+    CHECK(c.sendManualCommand("   ").empty());   // leer: nichts zu tun
+}
+
 TEST(anchor_points) {
     Rect r{10, 20, 100, 40};
     Vec2 c = anchorPoint(r, 4);

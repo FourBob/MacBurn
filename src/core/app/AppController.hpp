@@ -183,6 +183,11 @@ public:
     PrimaryAction primaryAction() const;
     void connect();
     void disconnect();
+    // Verbindungsverlauf (Fenster „Verbindungsverlauf“)
+    std::vector<grbl::TrafficEntry> trafficSince(uint64_t after) const { return device_->trafficSince(after); }
+    void clearTraffic() { device_->clearTraffic(); }
+    // Befehl von Hand senden. Gibt eine Meldung zurück, wenn er nicht gesendet wurde.
+    std::string sendManualCommand(const std::string& line);
     void jog(int dx, int dy);           // Richtung, Schrittweite aus dem Inspektor
     void home();
     void unlock();

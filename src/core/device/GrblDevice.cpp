@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "device/GrblDevice.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -70,6 +71,45 @@ void GrblDevice::abortJob(const std::string& reason) {
     abortReason_ = reason;
 }
 
+namespace {
+std::string realtimeName(uint8_t b) {
+    switch (b) {
+        case '?': return "?";
+        case '!': return "! (anhalten)";
+        case '~': return "~ (fortsetzen)";
+        case 0x18: return "Strg-X (zurücksetzen)";
+        case 0x85: return "Bewegung abbrechen (0x85)";
+        default: { char x[16]; std::snprintf(x, sizeof x, "0x%02X", b); return x; }
+    }
+}
+} // namespace
+
+void GrblDevice::traffic(bool outgoing, const std::string& text, bool status) {
+    std::lock_guard<std::mutex> lock(trafficMutex_);
+    TrafficEntry e;
+    e.seq = ++trafficSeq_;
+    e.time = std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();
+    e.outgoing = outgoing;
+    e.status = status;
+    e.text = text;
+    traffic_.push_back(std::move(e));
+    while (traffic_.size() > 5000) traffic_.pop_front();
+}
+
+std::vector<TrafficEntry> GrblDevice::trafficSince(uint64_t after) const {
+    std::lock_guard<std::mutex> lock(trafficMutex_);
+    std::vector<TrafficEntry> out;
+    auto it = std::lower_bound(traffic_.begin(), traffic_.end(), after + 1,
+                               [](const TrafficEntry& e, uint64_t s) { return e.seq < s; });
+    out.assign(it, traffic_.end());
+    return out;
+}
+
+void GrblDevice::clearTraffic() {
+    std::lock_guard<std::mutex> lock(trafficMutex_);
+    traffic_.clear();
+}
+
 void GrblDevice::remember(const std::string& entry) {
     double t = std::chrono::duration<double>(Clock::now() - started_).count();
     history_.push_back({t, entry});
@@ -90,7 +130,8 @@ void GrblDevice::run(int bootDelayMs) {
     started_ = Clock::now();
     // Steuerung starten lassen; Begrüßung und Startmeldungen verwerfen.
     auto bootEnd = Clock::now() + std::chrono::milliseconds(bootDelayMs);
-    while (Clock::now() < bootEnd && !stopRequested_) transport_->readLine(50);
+    while (Clock::now() < bootEnd && !stopRequested_)
+        if (auto l = transport_->readLine(50); l && !l->empty()) traffic(false, *l);
 
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -98,6 +139,7 @@ void GrblDevice::run(int bootDelayMs) {
         pending_.push_front({"$I", false});
     }
     transport_->write("?");
+    traffic(true, "?", true);
 
     auto lastPoll = Clock::now();
     auto lastAnswer = Clock::now();
@@ -122,8 +164,10 @@ void GrblDevice::run(int bootDelayMs) {
         if (abort) {
             abortInProgress_ = true;
             transport_->write(std::string(1, char(kFeedHold)));
+            traffic(true, realtimeName(kFeedHold));
             std::this_thread::sleep_for(std::chrono::milliseconds(150));
             transport_->write(std::string(1, char(kReset)));
+            traffic(true, realtimeName(kReset));
             inflight_.clear();
             inflightBytes_ = 0;
             if (jobActive_) { jobActive_ = false; emit({DeviceEvent::Kind::JobAborted, {}, reason}); }
@@ -142,6 +186,7 @@ void GrblDevice::run(int bootDelayMs) {
             }
             lastAnswer = Clock::now();
             if (!line->empty()) {
+                traffic(false, *line, line->front() == '<');
                 if (line->front() != '<') remember("← " + *line);   // Statuszeilen nicht, sonst ist der Verlauf nach 8 s voll
                 handleLine(*line);
             }
@@ -154,6 +199,7 @@ void GrblDevice::run(int bootDelayMs) {
                                                         : "Die USB-Verbindung ist weg (Kabel, Wackelkontakt oder Störung).";
                 break;
             }
+            traffic(true, "?", true);
             lastPoll = now;
         }
         // Stille: erst warnen, im Auftrag länger warten. Steht die Verbindung wirklich, hat die Steuerung
@@ -192,6 +238,7 @@ void GrblDevice::pump() {
     std::lock_guard<std::mutex> lock(mutex_);
     while (!realtime_.empty()) {
         transport_->write(std::string(1, char(realtime_.front())));
+        traffic(true, realtimeName(realtime_.front()), realtime_.front() == '?');
         realtime_.pop_front();
     }
     // Zeichenzählung: nur so viel senden, wie in den Empfangspuffer passt.
@@ -202,6 +249,7 @@ void GrblDevice::pump() {
         pending_.pop_front();
         if (!transport_->write(l.text + "\n")) break;
         remember("→ " + l.text);
+        traffic(true, l.text);
         inflightBytes_ += len;
         inflight_.push_back(l);
         if (l.job) ++jobTotal_;

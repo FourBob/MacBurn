@@ -43,6 +43,15 @@ struct DeviceEvent {
     size_t done = 0, total = 0;
 };
 
+// Ein Eintrag im Verbindungsverlauf (für das Verlaufsfenster).
+struct TrafficEntry {
+    uint64_t seq = 0;
+    double time = 0;          // Uhrzeit, Sekunden seit 1970
+    bool outgoing = false;    // → an den Laser, sonst ← vom Laser
+    bool status = false;      // Statusabfrage '?' oder Statusantwort <…>
+    std::string text;
+};
+
 class GrblDevice {
 public:
     using Sink = std::function<void(const DeviceEvent&)>;
@@ -64,6 +73,10 @@ public:
     void startJob(std::vector<std::string> lines);
     void abortJob(const std::string& reason);     // Rest verwerfen, Laser aus, Steuerung zurücksetzen
     bool jobActive() const { return jobActive_; }
+
+    // Verbindungsverlauf: alle Einträge mit seq > after (höchstens die letzten 5000). Thread-sicher.
+    std::vector<TrafficEntry> trafficSince(uint64_t after) const;
+    void clearTraffic();
 
     static constexpr uint8_t kFeedHold = '!';
     static constexpr uint8_t kResume = '~';
@@ -100,6 +113,10 @@ private:
     void handleLine(const std::string& line);
     void pump();
     void emit(DeviceEvent e) { if (sink_) sink_(e); }
+    void traffic(bool outgoing, const std::string& text, bool status = false);
+    mutable std::mutex trafficMutex_;
+    std::deque<TrafficEntry> traffic_;
+    uint64_t trafficSeq_ = 0;
 };
 
 } // namespace mb::grbl

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #import "AppDelegate.h"
 #import "MainWindow.h"
+#import "TrafficWindow.h"
 #import "Bridge.hpp"
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
@@ -11,6 +12,7 @@
 @implementation AppDelegate {
     std::unique_ptr<mb::AppController> _core;
     MainWindow* _window;
+    TrafficWindow* _traffic;
     NSMutableArray<NSString*>* _pending;   // Dateien, die vor dem Fenster ankommen
 }
 
@@ -167,6 +169,8 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
     [laser addItem:item(@"Neues Material testen …", @selector(laserTestNew:), @"")];
     [laser addItem:NSMenuItem.separatorItem];
     [laser addItem:item(@"Stopp", @selector(laserStop:), @".")];
+    [laser addItem:NSMenuItem.separatorItem];
+    [laser addItem:item(@"Verbindungsverlauf", @selector(showTraffic:), @"l", NSEventModifierFlagCommand | NSEventModifierFlagOption)];
 
     NSMenu* help = [[NSMenu alloc] initWithTitle:@"Hilfe"];
     [help addItem:item(@"Geräteprotokoll anzeigen", @selector(showDeviceLog:), @"")];
@@ -245,6 +249,11 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
 - (void)laserHome:(id)sender { _core->home(); }
 - (void)laserFrame:(id)sender { _core->frame(); }
 - (void)laserStop:(id)sender { _core->stop(); }
+- (void)showTraffic:(id)sender {
+    if (!_traffic) _traffic = [[TrafficWindow alloc] initWithCore:_core.get()];
+    [_traffic makeKeyAndOrderFront:nil];
+}
+
 - (void)showDeviceLog:(id)sender {
     NSString* path = NS(_core->logFile());
     if (![NSFileManager.defaultManager fileExistsAtPath:path]) {

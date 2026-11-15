@@ -3,6 +3,7 @@
 #include "app/AppController.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <ctime>
@@ -127,6 +128,25 @@ void AppController::disconnect() {
     device_->detach();
     dev_.connected = dev_.connecting = dev_.jobRunning = false;
     changed();
+}
+
+std::string AppController::sendManualCommand(const std::string& raw) {
+    std::string line = raw;
+    while (!line.empty() && std::isspace((unsigned char)line.back())) line.pop_back();
+    while (!line.empty() && std::isspace((unsigned char)line.front())) line.erase(0, 1);
+    if (line.empty()) return {};
+    if (!dev_.connected) return "Nicht verbunden.";
+    // Echtzeitbefehle, die auch während eines Auftrags gehen
+    if (line == "!" || line == "~" || line == "?") {
+        device_->realtime(uint8_t(line[0]));
+        log("HAND " + line);
+        return {};
+    }
+    if (dev_.jobRunning) return "Während eines Auftrags werden keine Befehle von Hand gesendet.";
+    lockedHead_.reset();   // der Kopf könnte bewegt werden
+    log("HAND " + line);
+    device_->sendLine(line);
+    return {};
 }
 
 void AppController::jog(int dx, int dy) {

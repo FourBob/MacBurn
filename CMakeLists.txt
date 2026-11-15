@@ -66,6 +66,7 @@ add_executable(MacBurn MACOSX_BUNDLE
   src/mac/MainWindow.mm
   src/mac/CanvasView.mm
   src/mac/InspectorView.mm
+  src/mac/TrafficWindow.mm
 )
 target_include_directories(MacBurn PRIVATE src/mac)
 target_compile_options(MacBurn PRIVATE -fobjc-arc -Wall)
