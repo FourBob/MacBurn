@@ -86,6 +86,9 @@ public:
 
     ~AppController();
     void setOnChange(std::function<void()> cb) { onChange_ = std::move(cb); }
+    // Wird mit true gerufen, sobald ein Auftrag läuft, mit false, wenn er endet:
+    // die Plattform verhindert solange den Ruhezustand des Rechners (sonst reißt die USB-Verbindung ab).
+    void setOnKeepAwake(std::function<void(bool)> cb) { onKeepAwake_ = std::move(cb); }
     // Häufige Statusmeldungen (Position): nur Statusleiste und Zeichenfläche neu zeichnen.
     void setOnStatus(std::function<void()> cb) { onStatus_ = std::move(cb); }
     // Führt eine Funktion auf dem Main-Thread aus (Cocoa: dispatch_async).
@@ -256,6 +259,8 @@ private:
     bool settingsDirty_ = false;
     bool isSample_ = true;
     std::function<void()> onChange_, onStatus_;
+    std::function<void(bool)> onKeepAwake_;
+    bool keepingAwake_ = false;
     std::function<void(std::function<void()>)> mainQueue_;
 
     struct DeviceState {

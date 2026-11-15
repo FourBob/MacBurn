@@ -101,6 +101,10 @@ void AppController::rebuild() {
 }
 
 void AppController::changed() {
+    if (dev_.jobRunning != keepingAwake_) {
+        keepingAwake_ = dev_.jobRunning;
+        if (onKeepAwake_) onKeepAwake_(keepingAwake_);
+    }
     rebuild();
     if (onChange_) onChange_();
 }

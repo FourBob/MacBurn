@@ -154,10 +154,12 @@ void SerialPort::close() {
 bool SerialPort::write(const std::string& data) {
     if (fd_ < 0) return false;
     size_t done = 0;
+    int waited = 0;
     while (done < data.size()) {
         ssize_t n = ::write(fd_, data.data() + done, data.size() - done);
         if (n < 0) {
-            if (errno == EAGAIN) { pollfd p{fd_, POLLOUT, 0}; ::poll(&p, 1, 50); continue; }
+            // Nimmt die Gegenseite nichts mehr an (Steuerung hängt, Rechner schlief), nicht ewig warten.
+            if (errno == EAGAIN && waited < 2000) { pollfd p{fd_, POLLOUT, 0}; ::poll(&p, 1, 50); waited += 50; continue; }
             return false;
         }
         done += size_t(n);

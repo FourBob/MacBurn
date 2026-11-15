@@ -13,6 +13,7 @@
     std::unique_ptr<mb::AppController> _core;
     MainWindow* _window;
     TrafficWindow* _traffic;
+    id<NSObject> _awake;   // verhindert den Ruhezustand, solange ein Auftrag läuft
     NSMutableArray<NSString*>* _pending;   // Dateien, die vor dem Fenster ankommen
 }
 
@@ -23,6 +24,17 @@
     _core = std::make_unique<mb::AppController>(STD(system), STD(user));
     NSString* logs = [NSHomeDirectory() stringByAppendingPathComponent:@"Library/Logs/MacBurn/Geraet.log"];
     _core->setLogFile(STD(logs));
+    __weak AppDelegate* weakSelf = self;
+    _core->setOnKeepAwake([weakSelf](bool on) { [weakSelf keepAwake:on]; });
+    NSNotificationCenter* ws = NSWorkspace.sharedWorkspace.notificationCenter;
+    [ws addObserverForName:NSWorkspaceWillSleepNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification*) {
+        AppDelegate* s = weakSelf;
+        if (s) s->_core->log(s->_core->jobRunning() ? "MAC SCHLÄFT EIN – während eines Auftrags (Deckel zu?)" : "MAC SCHLÄFT EIN");
+    }];
+    [ws addObserverForName:NSWorkspaceDidWakeNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification*) {
+        AppDelegate* s = weakSelf;
+        if (s) s->_core->log("MAC WACHT AUF");
+    }];
 
     [self buildMenu];
     _window = [[MainWindow alloc] initWithCore:_core.get()];
@@ -30,6 +42,18 @@
     for (NSString* p in _pending) [_window openPath:p];
     _pending = nil;
     [NSApp activate];
+}
+
+- (void)keepAwake:(bool)on {
+    if (on && !_awake) {
+        _awake = [NSProcessInfo.processInfo beginActivityWithOptions:NSActivityUserInitiated | NSActivityIdleSystemSleepDisabled
+                                                              reason:@"Der Laser arbeitet einen Auftrag ab."];
+        _core->log("RUHEZUSTAND VERHINDERT (Auftrag läuft)");
+    } else if (!on && _awake) {
+        [NSProcessInfo.processInfo endActivity:_awake];
+        _awake = nil;
+        _core->log("RUHEZUSTAND WIEDER ERLAUBT");
+    }
 }
 
 - (void)applicationWillTerminate:(NSNotification*)note {

@@ -201,6 +201,10 @@ Zeilen ins Protokoll – dazu, ob der USB-Anschluss noch da ist. Während eines 
 20 Sekunden; antwortet der Laser wieder, läuft der Auftrag weiter. Startet die Steuerung mitten im Auftrag neu
 (z. B. Spannungseinbruch), bricht MacBurn mit dieser Meldung ab.
 
+Während ein Auftrag läuft, verhindert MacBurn den Ruhezustand des Macs (der Bildschirm darf aus).
+Schliefe der Mac ein, risse die USB-Verbindung ab und der Laser bliebe mitten im Auftrag stehen.
+Den Deckel eines MacBooks im Akkubetrieb nicht zuklappen. Einschlafen und Aufwachen stehen im Protokoll.
+
 ## Verbindungsverlauf
 
 *Laser › Verbindungsverlauf* (⌥⌘L) zeigt live, was zwischen MacBurn und dem Laser hin- und hergeht:
