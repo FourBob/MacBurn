@@ -1,3 +1,4 @@
+#include <atomic>
 // MacBurn – Kerntests ohne Fenster und ohne Hardware.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "app/AppController.hpp"
@@ -287,6 +288,8 @@ public:
     std::string realtimeBytes;
     size_t maxBuffered = 0;
     bool held = false;
+    std::atomic<bool> silent{false};    // Steuerung antwortet vorübergehend nicht
+    std::atomic<bool> rebootNow{false}; // Steuerung startet unerwartet neu
 
     bool write(const std::string& d) override {
         for (char ch : d) {
@@ -309,6 +312,8 @@ public:
         return true;
     }
     std::optional<std::string> readLine(int timeoutMs) override {
+        if (silent) { std::this_thread::sleep_for(std::chrono::milliseconds(std::min(timeoutMs, 2))); return std::nullopt; }
+        if (rebootNow.exchange(false)) { unacked_.clear(); buffered_ = 0; out_.clear(); return std::string("Grbl 1.1h ['$' for help]"); }
         if (out_.empty() && !unacked_.empty() && !held) {
             std::string l = unacked_.front();
             unacked_.pop_front();
@@ -408,6 +413,48 @@ TEST(device_detach_during_job_stops_laser) {
     CHECK(log.waitFor(grbl::DeviceEvent::Kind::Progress));
     dev->detach();
     CHECK(f->realtimeBytes.find(char(0x18)) != std::string::npos);
+}
+
+TEST(device_job_survives_short_silence) {
+    EventLog log;
+    auto fake = std::make_unique<FakeGrbl>();
+    FakeGrbl* f = fake.get();
+    grbl::GrblDevice dev([&](const grbl::DeviceEvent& e) { log.add(e); }, 120);
+    dev.attach(std::move(fake), 0);
+    CHECK(log.waitFor(grbl::DeviceEvent::Kind::Connected));
+    dev.startJob(std::vector<std::string>(400, "G1 X1 F100 S10"));
+    CHECK(log.waitFor(grbl::DeviceEvent::Kind::Progress));
+    f->silent = true;
+    CHECK(log.waitFor(grbl::DeviceEvent::Kind::Warning, 7000));   // nach 5 s: nur Warnung
+    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+    CHECK(!log.has(grbl::DeviceEvent::Kind::Disconnected));
+    CHECK(dev.jobActive());
+    f->silent = false;
+    CHECK(log.waitFor(grbl::DeviceEvent::Kind::JobFinished));
+    CHECK(!log.has(grbl::DeviceEvent::Kind::JobAborted));
+    bool history = false;
+    { std::lock_guard<std::mutex> l(log.m);
+      for (auto& e : log.events) if (e.kind == grbl::DeviceEvent::Kind::Diagnostic && e.text.find("→ G1 X1") != std::string::npos) history = true; }
+    CHECK(history);   // Verlauf der letzten Befehle landet im Protokoll
+    dev.detach();
+}
+
+TEST(device_unexpected_restart_aborts_job) {
+    EventLog log;
+    auto fake = std::make_unique<FakeGrbl>();
+    FakeGrbl* f = fake.get();
+    grbl::GrblDevice dev([&](const grbl::DeviceEvent& e) { log.add(e); }, 120);
+    dev.attach(std::move(fake), 0);
+    CHECK(log.waitFor(grbl::DeviceEvent::Kind::Connected));
+    dev.startJob(std::vector<std::string>(3000, "G1 X1 F100 S10"));
+    CHECK(log.waitFor(grbl::DeviceEvent::Kind::Progress));
+    f->rebootNow = true;
+    CHECK(log.waitFor(grbl::DeviceEvent::Kind::JobAborted));
+    std::string reason;
+    { std::lock_guard<std::mutex> l(log.m);
+      for (auto& e : log.events) if (e.kind == grbl::DeviceEvent::Kind::JobAborted) reason = e.text; }
+    CHECK(reason.find("neu gestartet") != std::string::npos);
+    dev.detach();
 }
 
 TEST(anchor_points) {

@@ -2,6 +2,7 @@
 #include "device/GrblDevice.hpp"
 
 #include <chrono>
+#include <cstdio>
 #include <cstdlib>
 
 namespace mb::grbl {
@@ -26,6 +27,8 @@ void GrblDevice::attach(std::unique_ptr<Transport> transport, int bootDelayMs) {
     jobTotal_ = jobDone_ = 0;
     jobActive_ = false;
     connectedReported_ = false;
+    abortInProgress_ = false;
+    history_.clear();
     stopRequested_ = false;
     running_ = true;
     worker_ = std::thread(&GrblDevice::run, this, bootDelayMs);
@@ -67,7 +70,24 @@ void GrblDevice::abortJob(const std::string& reason) {
     abortReason_ = reason;
 }
 
+void GrblDevice::remember(const std::string& entry) {
+    double t = std::chrono::duration<double>(Clock::now() - started_).count();
+    history_.push_back({t, entry});
+    while (history_.size() > 40) history_.pop_front();
+}
+
+std::string GrblDevice::history() const {
+    std::string out;
+    char b[32];
+    for (const auto& [t, e] : history_) {
+        std::snprintf(b, sizeof b, "%9.2f s  ", t);
+        out += "\n    " + std::string(b) + e;
+    }
+    return out;
+}
+
 void GrblDevice::run(int bootDelayMs) {
+    started_ = Clock::now();
     // Steuerung starten lassen; Begrüßung und Startmeldungen verwerfen.
     auto bootEnd = Clock::now() + std::chrono::milliseconds(bootDelayMs);
     while (Clock::now() < bootEnd && !stopRequested_) transport_->readLine(50);
@@ -82,6 +102,7 @@ void GrblDevice::run(int bootDelayMs) {
     auto lastPoll = Clock::now();
     auto lastAnswer = Clock::now();
     std::string lostReason;
+    bool warned = false;
 
     while (!stopRequested_) {
         // Abbruch: Rest verwerfen, anhalten, zurücksetzen (schaltet den Laser sofort ab)
@@ -99,29 +120,60 @@ void GrblDevice::run(int bootDelayMs) {
             }
         }
         if (abort) {
+            abortInProgress_ = true;
             transport_->write(std::string(1, char(kFeedHold)));
             std::this_thread::sleep_for(std::chrono::milliseconds(150));
             transport_->write(std::string(1, char(kReset)));
             inflight_.clear();
             inflightBytes_ = 0;
             if (jobActive_) { jobActive_ = false; emit({DeviceEvent::Kind::JobAborted, {}, reason}); }
+            emit({DeviceEvent::Kind::Diagnostic, {}, "Abbruch: " + reason + " Verlauf:" + history()});
         }
 
         pump();
 
         if (auto line = transport_->readLine(20)) {
+            auto silent = Clock::now() - lastAnswer;
+            if (warned) {
+                emit({DeviceEvent::Kind::Diagnostic, {}, "Laser antwortet wieder (nach " +
+                      std::to_string(std::chrono::duration_cast<std::chrono::seconds>(silent).count()) + " s Stille)."});
+                emit({DeviceEvent::Kind::Warning, {}, ""});   // Hinweis in der Statusleiste löschen
+                warned = false;
+            }
             lastAnswer = Clock::now();
-            if (!line->empty()) handleLine(*line);
+            if (!line->empty()) {
+                if (line->front() != '<') remember("← " + *line);   // Statuszeilen nicht, sonst ist der Verlauf nach 8 s voll
+                handleLine(*line);
+            }
         }
 
         auto now = Clock::now();
         if (now - lastPoll > std::chrono::milliseconds(200)) {
-            if (!transport_->write("?")) { lostReason = "Die Verbindung zum Laser ist abgebrochen."; break; }
+            if (!transport_->write("?")) {
+                lostReason = transport_->stillPresent() ? "Die Verbindung zum Laser ist abgebrochen."
+                                                        : "Die USB-Verbindung ist weg (Kabel, Wackelkontakt oder Störung).";
+                break;
+            }
             lastPoll = now;
         }
-        if (now - lastAnswer > std::chrono::seconds(5)) {
-            lostReason = connectedReported_ ? "Der Laser antwortet nicht mehr." :
+        // Stille: erst warnen, im Auftrag länger warten. Steht die Verbindung wirklich, hat die Steuerung
+        // ohnehin keine neuen Befehle und bleibt stehen (Laser-Modus: Strahl aus ohne Bewegung).
+        auto silence = now - lastAnswer;
+        if (!warned && connectedReported_ && silence > std::chrono::seconds(5)) {
+            warned = true;
+            emit({DeviceEvent::Kind::Warning, {}, transport_->stillPresent()
+                      ? "Laser antwortet seit 5 s nicht – warte weiter …" : "USB-Anschluss ist verschwunden – warte …"});
+            emit({DeviceEvent::Kind::Diagnostic, {}, "Seit 5 s keine Antwort. USB-Anschluss " +
+                      std::string(transport_->stillPresent() ? "vorhanden" : "VERSCHWUNDEN") + ", Zeilen in Arbeit: " +
+                      std::to_string(inflight_.size()) + ". Letzter Verlauf:" + history()});
+        }
+        auto limit = std::chrono::seconds(jobActive_ ? 20 : 5);
+        if (silence > limit) {
+            if (!transport_->stillPresent()) lostReason = "Die USB-Verbindung ist weg (Kabel, Wackelkontakt oder Störung).";
+            else lostReason = connectedReported_ ? "Der Laser antwortet nicht mehr." :
                 "Der Laser antwortet nicht. Ist er eingeschaltet (Netzteil) und der Not-Aus gelöst?";
+            emit({DeviceEvent::Kind::Diagnostic, {}, "Aufgegeben nach " +
+                      std::to_string(std::chrono::duration_cast<std::chrono::seconds>(silence).count()) + " s Stille. Verlauf:" + history()});
             break;
         }
     }
@@ -149,6 +201,7 @@ void GrblDevice::pump() {
         Line l = pending_.front();
         pending_.pop_front();
         if (!transport_->write(l.text + "\n")) break;
+        remember("→ " + l.text);
         inflightBytes_ += len;
         inflight_.push_back(l);
         if (l.job) ++jobTotal_;
@@ -230,9 +283,13 @@ void GrblDevice::handleLine(const std::string& line) {
         return;
     }
     if (line.rfind("Grbl", 0) == 0) {
-        // Neustart der Steuerung (z. B. nach Reset): Puffer ist leer.
+        // Neustart der Steuerung (nach unserem Reset – oder unerwartet, z. B. Spannungseinbruch): Puffer ist leer.
+        emit({DeviceEvent::Kind::Diagnostic, {}, "Steuerung meldet sich neu: „" + line + "“. Verlauf:" + history()});
+        bool unexpected = jobActive_ && !abortInProgress_;
+        abortInProgress_ = false;   // Begrüßung nach unserem Reset ist da – der nächste Neustart wäre wieder unerwartet
         inflight_.clear();
         inflightBytes_ = 0;
+        if (unexpected) abortJob("Die Steuerung ist mitten im Auftrag neu gestartet (z. B. Spannungseinbruch oder Störung).");
     }
 }
 

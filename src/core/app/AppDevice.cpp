@@ -403,6 +403,13 @@ void AppController::handleDevice(const grbl::DeviceEvent& e) {
             if (test_) { test_->ran = true; message_ = "Test fertig. Jetzt die Skalen ablesen und unten eintragen."; break; }
             message_ = "Auftrag fertig.";
             break;
+        case K::Diagnostic:
+            log("DIAGNOSE " + e.text);
+            return;
+        case K::Warning:
+            if (!e.text.empty()) log("WARNUNG " + e.text);
+            message_ = e.text;
+            break;
         case K::JobAborted:
             log("AUFTRAG ABGEBROCHEN · " + e.text + " · " + posText(workPos()) + " · nach " + std::to_string(dev_.done) +
                 "/" + std::to_string(dev_.total) + " Zeilen");

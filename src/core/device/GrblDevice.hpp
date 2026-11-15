@@ -7,6 +7,7 @@
 #include "device/Grbl.hpp"
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <deque>
 #include <functional>
@@ -32,6 +33,8 @@ struct DeviceEvent {
         Progress,       // done/total (Auftragszeilen bestätigt)
         JobFinished,    // Auftrag vollständig ausgeführt
         JobAborted,     // text = Grund
+        Diagnostic,     // text = Hinweis fürs Protokoll (z. B. Verlauf vor einer Störung), nicht für die Statusleiste
+        Warning,        // text = vorübergehende Störung (z. B. „antwortet seit 5 s nicht“), Statusleiste
     } kind;
     Status status;
     std::string text;
@@ -87,8 +90,13 @@ private:
     size_t inflightBytes_ = 0;
     size_t jobTotal_ = 0, jobDone_ = 0;
     bool connectedReported_ = false;
+    bool abortInProgress_ = false;   // eigener Reset läuft: dessen Begrüßung ist kein unerwarteter Neustart
 
     void run(int bootDelayMs);
+    void remember(const std::string& entry);   // Verlauf der letzten Befehle/Antworten
+    std::string history() const;
+    std::deque<std::pair<double, std::string>> history_;   // (Sekunden seit Start, Eintrag) – nur Geräte-Thread
+    std::chrono::steady_clock::time_point started_;
     void handleLine(const std::string& line);
     void pump();
     void emit(DeviceEvent e) { if (sink_) sink_(e); }

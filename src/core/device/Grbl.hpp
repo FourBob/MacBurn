@@ -43,6 +43,8 @@ public:
     virtual std::optional<std::string> readLine(int timeoutMs) = 0;
     virtual void close() = 0;
     virtual std::string description() const = 0;
+    // Ist das Gerät noch vorhanden (z. B. USB-Anschluss nicht verschwunden)?
+    virtual bool stillPresent() const { return true; }
 };
 
 class SerialPort : public Transport {
@@ -55,6 +57,7 @@ public:
     bool open(const std::string& path, int baud, std::string* error = nullptr);
     void close() override;
     std::string description() const override { return path_; }
+    bool stillPresent() const override;
     bool isOpen() const { return fd_ >= 0; }
 
     bool write(const std::string& data) override;

@@ -122,6 +122,10 @@ std::vector<std::string> listSerialPorts() {
 
 SerialPort::~SerialPort() { close(); }
 
+bool SerialPort::stillPresent() const {
+    return !path_.empty() && ::access(path_.c_str(), F_OK) == 0;
+}
+
 bool SerialPort::open(const std::string& path, int baud, std::string* error) {
     close();
     fd_ = ::open(path.c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
