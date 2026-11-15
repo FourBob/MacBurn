@@ -32,9 +32,23 @@
     [NSApp activate];
 }
 
+- (void)applicationWillTerminate:(NSNotification*)note {
+    if (_core) _core->disconnect();   // hält einen laufenden Auftrag an und schließt den Anschluss sauber
+}
+
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication*)app { return YES; }
 
 - (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication*)app {
+    if (_core->jobRunning()) {
+        // Nie still beenden, solange der Laser arbeitet.
+        NSAlert* al = [[NSAlert alloc] init];
+        al.messageText = @"Der Laser arbeitet gerade";
+        al.informativeText = @"Beim Beenden wird der Auftrag abgebrochen und der Laser angehalten.";
+        [al addButtonWithTitle:@"Weiterlasern"];
+        [al addButtonWithTitle:@"Abbrechen und beenden"];
+        if ([al runModal] == NSAlertFirstButtonReturn) return NSTerminateCancel;
+        _core->stop();
+    }
     if (!_window || !_window.isVisible || !_core->isModified()) return NSTerminateNow;
     [_window confirmUnsavedThen:^(BOOL proceed) { [NSApp replyToApplicationShouldTerminate:proceed]; }];
     return NSTerminateLater;
