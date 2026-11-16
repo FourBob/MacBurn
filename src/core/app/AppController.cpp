@@ -125,7 +125,10 @@ void AppController::editLayer(const std::string& label, std::function<void(Layer
 
 void AppController::setPhase(Phase p) {
     if (p == Phase::Test && !test_) { startMaterialTest(false); return; }   // erster Wechsel: Test mit dem gewählten Material
-    if (p != phase_) lockedHead_.reset();
+    if (p != phase_) {
+        lockedHead_.reset();
+        if (phase_ == Phase::Test || p == Phase::Test) message_.clear();   // Testhinweis gehört nur in die Testphase
+    }
     phase_ = p;
     changed();
 }
