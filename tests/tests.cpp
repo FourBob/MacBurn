@@ -1,3 +1,4 @@
+#include <unistd.h>
 #include <atomic>
 // MacBurn – Kerntests ohne Fenster und ohne Hardware.
 // SPDX-License-Identifier: GPL-3.0-or-later
@@ -302,6 +303,8 @@ public:
     std::string realtimeBytes;
     size_t maxBuffered = 0;
     bool held = false;
+    int homeReports = 0;                // nach $H einige Male „Home“ melden
+    std::atomic<int> ackDelayMs{0};     // langsame Steuerung (jede Zeile braucht Zeit)
     std::atomic<bool> silent{false};    // Steuerung antwortet vorübergehend nicht
     std::atomic<bool> rebootNow{false}; // Steuerung startet unerwartet neu
 
@@ -309,10 +312,13 @@ public:
         for (char ch : d) {
             if (partial_.empty() && (ch == '?' || ch == '!' || ch == '~' || ch == 0x18 || uint8_t(ch) == 0x85)) {
                 realtimeBytes += ch;
-                if (ch == '?') out_.push_back(std::string("<") + (held ? "Hold:0" : unacked_.empty() ? "Idle" : "Run") + "|MPos:10.000,20.000,0.000|FS:0,0>");
+                if (ch == '?') {
+                    std::string st = homeReports > 0 ? (--homeReports, "Home") : held ? "Hold:0" : unacked_.empty() ? "Idle" : "Run";
+                    out_.push_back("<" + st + "|MPos:10.000,20.000,0.000|FS:0,0>");
+                }
                 if (ch == '!') held = true;
                 if (ch == '~') held = false;
-                if (ch == 0x18) { unacked_.clear(); buffered_ = 0; out_.push_back("Grbl 1.1h ['$' for help]"); }
+                if (ch == 0x18) { held = false; unacked_.clear(); buffered_ = 0; out_.push_back("Grbl 1.1h ['$' for help]"); }
                 continue;
             }
             if (ch == '\n') {
@@ -329,11 +335,13 @@ public:
         if (silent) { std::this_thread::sleep_for(std::chrono::milliseconds(std::min(timeoutMs, 2))); return std::nullopt; }
         if (rebootNow.exchange(false)) { unacked_.clear(); buffered_ = 0; out_.clear(); return std::string("Grbl 1.1h ['$' for help]"); }
         if (out_.empty() && !unacked_.empty() && !held) {
+            if (ackDelayMs > 0) std::this_thread::sleep_for(std::chrono::milliseconds(int(ackDelayMs)));
             std::string l = unacked_.front();
             unacked_.pop_front();
             buffered_ -= l.size() + 1;
             if (l == "$I") { out_.push_back("[VER:1.1h.20231023:]"); out_.push_back("[PRODUCER:Test]"); }
             if (l == "$$") out_.push_back("$130=410.000");
+            if (l == "$H") homeReports = 3;
             out_.push_back(l.rfind("G99", 0) == 0 ? "error:20" : "ok");
         }
         if (out_.empty()) { std::this_thread::sleep_for(std::chrono::milliseconds(std::min(timeoutMs, 2))); return std::nullopt; }
@@ -551,6 +559,151 @@ TEST(material_test_is_own_phase) {
     CHECK(name);
     c.endMaterialTest();
     CHECK(c.phase() == Phase::Laser);
+}
+
+TEST(resume_restart_point_and_preamble) {
+    Job job;
+    auto sq = [&](double x, double y) {
+        job.moves.push_back({Move::Kind::Rapid, {x, y}});
+        for (Vec2 p : {Vec2{x + 10, y}, Vec2{x + 10, y + 10}, Vec2{x, y + 10}, Vec2{x, y}})
+            job.moves.push_back({Move::Kind::Burn, p, 300, 100});
+    };
+    sq(0, 0);
+    sq(50, 0);
+    GcodeOptions o; o.travelSpeed = 3000; o.airAssistGcode = true;
+    std::vector<std::string> lines;
+    std::istringstream in(writeGcode(job, o));
+    for (std::string l; std::getline(in, l);) if (!l.empty() && l[0] != ';') lines.push_back(l);
+    auto t = trackGcode(lines);
+    CHECK(t.dynamicPower);
+    CHECK(t.air);
+    // Kopf steht mitten auf der rechten Kante des zweiten Quadrats
+    size_t exec = locateExecuting(t, 0, lines.size(), {60, 5});
+    CHECK(t.burn[exec]);
+    size_t r = restartLine(t, exec);
+    CHECK(!t.burn[r] && t.motion[r]);
+    NEAR(t.to[r].x, 50); NEAR(t.to[r].y, 0);       // Anfang des zweiten Quadrats
+    CHECK(lines[r].find("S0") != std::string::npos);
+    size_t pre = 0;
+    auto res = resumeLines(lines, t, r, &pre);
+    CHECK(res[0] == "G21" && res[1] == "G90" && res[2] == "M4 S0" && res[3] == "M8");
+    CHECK(res[pre] == lines[r]);
+    CHECK(res.size() == pre + lines.size() - r);
+    Rect b = remainingBounds(t, r);
+    NEAR(b.x, 50); NEAR(b.w, 10);
+    CHECK(remainingPaths(t, r).size() == 1);
+    // Mitten in einer Leerfahrt: Neubeginn genau dort
+    size_t travel = restartLine(t, lines.size() - 1);
+    CHECK(restartLine(t, travel) == travel);
+}
+
+namespace {
+// Main-Thread im Test: Geräteereignisse sammeln und gezielt abarbeiten
+struct TestQueue {
+    std::mutex m;
+    std::vector<std::function<void()>> q;
+    void push(std::function<void()> f) { std::lock_guard<std::mutex> l(m); q.push_back(std::move(f)); }
+    void pump() {
+        std::vector<std::function<void()>> now;
+        { std::lock_guard<std::mutex> l(m); now.swap(q); }
+        for (auto& f : now) f();
+    }
+    template <class P> bool until(P pred, int ms = 8000) {
+        for (int i = 0; i < ms / 5; ++i) { pump(); if (pred()) return true; std::this_thread::sleep_for(std::chrono::milliseconds(5)); }
+        return false;
+    }
+};
+}
+
+TEST(resume_after_controller_restart) {
+    namespace fs = std::filesystem;
+    fs::path root = fs::temp_directory_path() / ("mbresume-" + std::to_string(::getpid()));
+    fs::remove_all(root);
+    std::string user = (root / "profiles").string();
+    TestQueue q;
+    FakeGrbl* f = nullptr;
+    {
+        AppController c(std::string(MB_SOURCE_DIR) + "/profiles", user);
+        c.setLogFile((root / "geraet.log").string());
+        c.setMainQueue([&](std::function<void()> fn) { q.push(std::move(fn)); });
+        c.setPhase(Phase::Laser);
+        auto fake = std::make_unique<FakeGrbl>();
+        f = fake.get();
+        c.connectTransport(std::move(fake), "test", 0);
+        CHECK(q.until([&] { return c.deviceConnected(); }));
+        c.home();
+        CHECK(q.until([&] { return c.deviceHomed() && c.primaryAction() == PrimaryAction::StartJob; }));
+        f->ackDelayMs = 1;
+        c.startJob(false);
+        CHECK(c.jobRunning());
+        CHECK(q.until([&] { return c.jobRunning() && c.inspector().size() > 0 && f->lines.size() > 300; }));
+        f->rebootNow = true;                          // Stromausfall: Steuerung startet neu
+        CHECK(q.until([&] { return !c.jobRunning(); }));
+        CHECK(c.resumeAvailable());
+        CHECK(fs::exists(root / "resume" / "stand.json"));
+        CHECK(fs::exists(root / "resume" / "auftrag.gcode"));
+        bool section = false, goEnabled = false;
+        q.until([&] {                                 // Steuerung wieder bereit (Idle)
+            for (auto& fl : c.inspector()) {
+                if (fl.label == "Unterbrochener Auftrag") section = true;
+                if (fl.key == "resumeJob") goEnabled = fl.enabled;
+            }
+            return goEnabled;
+        });
+        CHECK(section);
+        CHECK(goEnabled);                             // Referenz besteht noch (gleiche Verbindung)
+        size_t before = f->lines.size();
+        c.resumeJob();
+        CHECK(c.jobRunning());
+        CHECK(q.until([&] { return !c.jobRunning(); }, 20000));
+        CHECK(!c.resumeAvailable());                  // fertig → Sicherungspunkt weg
+        CHECK(!fs::exists(root / "resume" / "stand.json"));
+        CHECK(f->lines[before] == "G21");
+        CHECK(f->lines[before + 2] == "M4 S0");
+        bool travelFirst = false;
+        for (size_t i = before; i < f->lines.size(); ++i)
+            if (f->lines[i].rfind("G1", 0) == 0) { travelFirst = f->lines[i].find("S0") != std::string::npos; break; }
+        CHECK(travelFirst);                           // erst mit Laser aus zum Anfang der Kontur
+        c.disconnect();
+        q.pump();                                     // keine Ereignisse für ein schon zerstörtes Objekt liegen lassen
+    }
+    {
+        // Sicherungspunkt übersteht einen Neustart von MacBurn; ohne neue Referenzfahrt kein Fortsetzen
+        AppController c(std::string(MB_SOURCE_DIR) + "/profiles", user);
+        c.setMainQueue([&](std::function<void()> fn) { q.push(std::move(fn)); });
+        c.setPhase(Phase::Laser);
+        auto fake = std::make_unique<FakeGrbl>();
+        f = fake.get();
+        c.connectTransport(std::move(fake), "test", 0);
+        CHECK(q.until([&] { return c.deviceConnected(); }));
+        c.home();
+        CHECK(q.until([&] { return c.deviceHomed() && c.primaryAction() == PrimaryAction::StartJob; }));
+        f->ackDelayMs = 1;
+        c.startJob(false);
+        CHECK(q.until([&] { return f->lines.size() > 300; }));
+        f->rebootNow = true;
+        CHECK(q.until([&] { return !c.jobRunning(); }));
+        c.disconnect();
+        q.pump();
+    }
+    {
+        AppController c(std::string(MB_SOURCE_DIR) + "/profiles", user);
+        c.setMainQueue([&](std::function<void()> fn) { q.push(std::move(fn)); });
+        CHECK(c.resumeAvailable());
+        c.setPhase(Phase::Laser);
+        CHECK(!c.renderList().strokes.empty());       // Rest wird gezeigt
+        c.connectTransport(std::make_unique<FakeGrbl>(), "test", 0);
+        CHECK(q.until([&] { return c.deviceConnected() && c.primaryAction() == PrimaryAction::StartJob; }));
+        c.resumeJob();
+        CHECK(!c.jobRunning());                       // erst referenzieren
+        c.discardResume();
+        CHECK(!c.resumeAvailable());
+        CHECK(!fs::exists(root / "resume"));
+        c.disconnect();
+        q.pump();
+    }
+    if (std::getenv("MB_KEEP")) return;
+    fs::remove_all(root);
 }
 
 TEST(anchor_points) {

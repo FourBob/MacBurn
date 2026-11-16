@@ -37,6 +37,7 @@ add_library(macburn_core STATIC
   src/core/document/Document.cpp
   src/core/job/Job.cpp
   src/core/job/MaterialTest.cpp
+  src/core/job/Resume.cpp
   src/core/device/Grbl.cpp
   src/core/device/GrblDevice.cpp
   src/core/render/RenderList.cpp
@@ -47,6 +48,7 @@ add_library(macburn_core STATIC
   src/core/app/AppText.cpp
   src/core/app/AppColor.cpp
   src/core/app/AppTest.cpp
+  src/core/app/AppResume.cpp
   src/core/io/Xml.cpp
   src/core/io/SvgImport.cpp
   src/core/io/Project.cpp

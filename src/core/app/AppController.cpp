@@ -55,6 +55,7 @@ AppController::AppController(const std::string& systemProfiles, const std::strin
     }
     doc_ = Document::sample();
     loadLastChoice();
+    loadCheckpoint();
     rebuild();
     device_ = std::make_unique<grbl::GrblDevice>([this](const grbl::DeviceEvent& e) {
         // Geräte-Thread → Main-Thread
@@ -288,6 +289,9 @@ void AppController::pressButton(const std::string& key) {
     if (key == "unlock") { unlock(); return; }
     if (key == "frame") { frame(); return; }
     if (key == "stop") { stop(); return; }
+    if (key == "resumeJob") { resumeJob(); return; }
+    if (key == "resumeFrame") { frameRemainder(); return; }
+    if (key == "resumeDiscard") { discardResume(); return; }
     if (key == "jog+x") { jog(1, 0); return; }
     if (key == "jog-x") { jog(-1, 0); return; }
     if (key == "jog+y") { jog(0, 1); return; }
@@ -689,6 +693,17 @@ RenderList AppController::renderList() const {
             rl.strokes.push_back(std::move(st));
         }
         rl.jobFrame = Rect{plate.bounds.x + off.x, plate.bounds.y + off.y, plate.bounds.w, plate.bounds.h};
+        if (dev_.connected) rl.head = workPos();
+        return rl;
+    }
+    if (phase_ == Phase::Laser && resumeAvailable() && !dev_.jobRunning) {
+        // Unterbrochener Auftrag: zeigen, was noch zu brennen ist
+        rl.strokes.clear();
+        size_t r = restartIndex();
+        for (auto& path : remainingPaths(checkpoint_->track, r))
+            rl.strokes.push_back(Stroke{path, false, {0.85f, 0.35f, 0.10f, 1}, 1.2f, false});
+        Rect b = remainingBounds(checkpoint_->track, r);
+        if (b.w > 0 || b.h > 0) rl.jobFrame = b;
         if (dev_.connected) rl.head = workPos();
         return rl;
     }

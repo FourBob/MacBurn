@@ -123,6 +123,16 @@ void AppController::connect() {
     changed();
 }
 
+void AppController::connectTransport(std::unique_ptr<grbl::Transport> t, const std::string& name, int bootDelayMs) {
+    if (dev_.connected || dev_.connecting) return;
+    dev_ = {};
+    dev_.connecting = true;
+    dev_.port = name;
+    message_.clear();
+    device_->attach(std::move(t), bootDelayMs);
+    changed();
+}
+
 void AppController::disconnect() {
     lockedHead_.reset();
     device_->detach();
@@ -321,8 +331,12 @@ void AppController::startJob(bool forTest) {
             layers += b;
         }
         log("AUFTRAG START „" + title_ + "“ · " + std::to_string(lines.size()) + " Zeilen · Material " + material()->name +
-            " · Position " + (origin_ == 1 ? "am Laserkopf " + posText(startHead) : std::string("wie auf der Fläche")) + " · " + layers);
+            " · Position " + (origin_ == 1 ? "am Laserkopf " + posText(startHead) : std::string("wie auf der Fläche")) + " · " + layers +
+            (dev_.homed ? " · referenziert" : " · OHNE Referenzfahrt"));
     }
+    lines.erase(std::remove_if(lines.begin(), lines.end(), [](const std::string& l) { return l.empty() || l[0] == ';'; }),
+                lines.end());   // so, wie das Gerät sie zählt
+    beginCheckpoint(lines);
     device_->startJob(std::move(lines));
     dev_.jobRunning = true;
     dev_.done = 0;
@@ -367,13 +381,19 @@ void AppController::handleDevice(const grbl::DeviceEvent& e) {
                     (e.status.pins.empty() ? "" : " · Eingänge " + e.status.pins) +
                     (dev_.jobRunning ? " · Auftrag " + std::to_string(dev_.done) + "/" + std::to_string(dev_.total) : ""));
             lastPins_ = e.status.pins;
+            if (dev_.state.rfind("Home", 0) == 0 && e.status.state.rfind("Idle", 0) == 0) {
+                dev_.homed = true;
+                log("REFERENZIERT");
+            }
             dev_.state = e.status.state;
+            if (dev_.jobRunning) updateCheckpoint();
             if (stateChanged || e.kind == K::Connected) changed();
             else if (onStatus_) onStatus_();
             return;
         }
         case K::Disconnected:
             log("GETRENNT" + (e.text.empty() ? std::string() : " · " + e.text));
+            if (checkpoint_ && checkpoint_->running) { checkpoint_->running = false; saveCheckpoint(false); }
             dev_.connected = dev_.connecting = dev_.jobRunning = false;
             if (!e.text.empty()) message_ = e.text;
             else message_ = "Getrennt.";
@@ -395,6 +415,7 @@ void AppController::handleDevice(const grbl::DeviceEvent& e) {
                 (lastPins_.empty() ? "" : " · Eingänge " + lastPins_) +
                 (dev_.jobRunning ? " · Auftrag " + std::to_string(dev_.done) + "/" + std::to_string(dev_.total) : ""));
             dev_.lastProblem = e.text;
+            dev_.homed = false;   // nach einem Alarm ist die Position nicht mehr sicher
             message_ = "Alarm: " + e.text;
             break;
         case K::Error:
@@ -412,6 +433,12 @@ void AppController::handleDevice(const grbl::DeviceEvent& e) {
             size_t oldPct = dev_.total ? dev_.done * 100 / dev_.total : 0;
             dev_.done = e.done;
             dev_.total = e.total;
+            if (checkpoint_ && checkpoint_->running && checkpoint_->deviceBase != 0) {
+                // fortgesetzter Auftrag: Fortschritt bezogen auf den ganzen Auftrag
+                long whole = long(e.done) + checkpoint_->deviceBase;
+                dev_.done = size_t(std::clamp<long>(whole, 0, long(checkpoint_->lines.size())));
+                dev_.total = checkpoint_->lines.size();
+            }
             size_t pct = dev_.total ? dev_.done * 100 / dev_.total : 0;
             if (pct == oldPct) return;   // nur bei vollem Prozent neu aufbauen
             if (pct / 10 != oldPct / 10) log("FORTSCHRITT " + std::to_string(pct) + " % · " + posText(workPos()));
@@ -420,6 +447,7 @@ void AppController::handleDevice(const grbl::DeviceEvent& e) {
         case K::JobFinished:
             log("AUFTRAG FERTIG");
             dev_.jobRunning = false;
+            if (checkpoint_ && checkpoint_->running) discardResume();
             if (test_) { test_->ran = true; message_ = "Test fertig. Jetzt die Skalen ablesen und unten eintragen."; break; }
             message_ = "Auftrag fertig.";
             break;
@@ -434,7 +462,14 @@ void AppController::handleDevice(const grbl::DeviceEvent& e) {
             log("AUFTRAG ABGEBROCHEN · " + e.text + " · " + posText(workPos()) + " · nach " + std::to_string(dev_.done) +
                 "/" + std::to_string(dev_.total) + " Zeilen");
             dev_.jobRunning = false;
-            message_ = "Auftrag abgebrochen: " + e.text + " Laser ist aus. Vor dem nächsten Auftrag bitte eine Referenzfahrt machen.";
+            if (checkpoint_ && checkpoint_->running) {
+                updateCheckpoint();
+                checkpoint_->running = false;
+                saveCheckpoint(false);
+                log("SICHERUNGSPUNKT Zeile " + std::to_string(checkpoint_->executing + 1) + " · Neubeginn ab Zeile " +
+                    std::to_string(restartIndex() + 1) + " von " + std::to_string(checkpoint_->lines.size()));
+            }
+            message_ = "Auftrag abgebrochen: " + e.text + " Laser ist aus. Er lässt sich unter „Unterbrochener Auftrag“ fortsetzen.";
             break;
     }
     changed();
@@ -462,6 +497,7 @@ void AppController::addDeviceFields(std::vector<Field>& f) const {
         d.enabled = !dev_.jobRunning;
         f.push_back(d);
     }
+    if (!inTest()) addResumeFields(f);
     if (!dev_.connected) {
         if (inTest()) return;   // Materialtest hat eigene Felder
         f.push_back({Field::Kind::Header, "", "Auftrag"});
@@ -518,6 +554,8 @@ void AppController::addDeviceFields(std::vector<Field>& f) const {
         s.highlight = true;
         f.push_back(s);
     } else {
+        if (!dev_.homed && !resumeAvailable())
+            f.push_back({Field::Kind::Info, "", "Tipp: Mit einer Referenzfahrt vor dem Auftrag lässt er sich nach einem Stromausfall genau fortsetzen."});
         f.push_back({Field::Kind::Info, "", "Geschätzte Laufzeit: " + estimateText()});
         Field fr{Field::Kind::Button, "frame", "Rahmen abfahren (Laser aus)"};
         fr.enabled = idle && off.has_value();

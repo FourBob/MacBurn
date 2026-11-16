@@ -165,6 +165,24 @@ Die Zeitschätzung bildet die Bahnplanung von GRBL nach (Beschleunigung, Kurvena
 Leerfahrten und Rahmen laufen mit einer schonenden Fahrgeschwindigkeit aus dem Maschinenprofil
 (X3 Pro: 3000 mm/min), weil der Eilgang im Test Schritte verloren hat.
 
+### Fortsetzen nach Abbruch
+
+Während eines Auftrags sichert MacBurn jede Sekunde, wo der Laser gerade arbeitet
+(`~/Library/Application Support/MacBurn/resume/`). Bricht der Auftrag ab – Stromausfall, Spannungseinbruch,
+Verbindungsabbruch oder Stopp –, erscheint unter *Lasern* der Abschnitt **Unterbrochener Auftrag**, auch nach
+einem Neustart von MacBurn. Die Fläche zeigt in Orange, was noch fehlt.
+
+1. Verbinden. Lief vor dem Auftrag eine **Referenzfahrt**, verlangt MacBurn jetzt wieder eine – danach stimmt
+   die Position genau, auch wenn die Steuerung zwischendurch aus war.
+2. *Rahmen des Rests abfahren* (Laser aus) zum Prüfen.
+3. *Fortsetzen*: Der Laser fährt mit ausgeschaltetem Strahl zum Anfang der Kontur (Schneiden) bzw. der
+   Zeile (Gravieren), die gerade lief, und macht von dort mit denselben Werten weiter.
+
+Ohne Referenzfahrt vor dem Auftrag passt es nur, wenn die Steuerung nicht neu gestartet ist (z. B. nach einem
+USB-Abbruch) und das Werkstück nicht bewegt wurde. Darum am besten vor längeren Aufträgen referenzieren.
+An der Neubeginn-Stelle kann eine Kontur doppelt gebrannt werden; beim Gravieren ist dort evtl. ein Übergang
+zu sehen. *Verwerfen* löscht den Sicherungspunkt.
+
 ### Projekte
 
 *Ablage › Sichern* (⌘S) legt eine `.macburn`-Datei an: lesbares JSON mit Formen, Ebenen, Projekt-Änderungen,

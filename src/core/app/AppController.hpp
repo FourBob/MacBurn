@@ -9,6 +9,7 @@
 #include "text/Font.hpp"
 #include "job/Job.hpp"
 #include "job/MaterialTest.hpp"
+#include "job/Resume.hpp"
 #include "profiles/Profiles.hpp"
 #include "render/RenderList.hpp"
 
@@ -188,7 +189,14 @@ public:
     // --- Gerät ---
     PrimaryAction primaryAction() const;
     void connect();
+    // Verbinden über eine schon geöffnete Verbindung (Tests mit simulierter Steuerung, später WLAN)
+    void connectTransport(std::unique_ptr<grbl::Transport> t, const std::string& name, int bootDelayMs = 2500);
     void disconnect();
+    // Fortsetzen nach Abbruch (Stromausfall, Verbindungsabbruch, Stopp)
+    bool resumeAvailable() const { return checkpoint_ && !checkpoint_->running; }
+    void resumeJob();
+    void frameRemainder();
+    void discardResume();
     // Verbindungsverlauf (Fenster „Verbindungsverlauf“)
     std::vector<grbl::TrafficEntry> trafficSince(uint64_t after) const { return device_->trafficSince(after); }
     void clearTraffic() { device_->clearTraffic(); }
@@ -205,6 +213,7 @@ public:
     void pauseOrResume();
     void stop();
     bool deviceConnected() const { return dev_.connected; }
+    bool deviceHomed() const { return dev_.homed; }
     int positionMode() const { return origin_; }   // 0 = wie auf der Fläche, 1 = am Laserkopf
     int anchor() const { return anchor_; }
     bool jobRunning() const { return dev_.jobRunning; }
@@ -253,6 +262,25 @@ private:
         bool ran = false;
     };
     std::optional<TestState> test_;
+    // Sicherungspunkt des laufenden bzw. abgebrochenen Auftrags (liegt auch auf der Platte)
+    struct Checkpoint {
+        std::string title, material, startedAt;
+        std::vector<std::string> lines;   // Auftragszeilen, genau wie gesendet
+        GcodeTrack track;
+        bool homedAtStart = false;
+        size_t executing = 0;             // Zeile, die zuletzt lief (Index in lines)
+        long deviceBase = 0;              // Index in lines = bestätigte Gerätezeilen + deviceBase
+        bool running = false;             // gehört zum laufenden Auftrag
+        double savedAt = 0;               // steady-Sekunden der letzten Sicherung
+    };
+    std::optional<Checkpoint> checkpoint_;
+    std::string resumeDir() const;
+    void beginCheckpoint(std::vector<std::string> lines);
+    void updateCheckpoint();
+    void saveCheckpoint(bool withLines);
+    void loadCheckpoint();
+    void addResumeFields(std::vector<Field>& f) const;
+    size_t restartIndex() const { return checkpoint_ ? restartLine(checkpoint_->track, checkpoint_->executing) : 0; }
     MaterialTestPlate testPlate() const;
     std::optional<Vec2> testOffset() const;
     void addTestFields(std::vector<Field>& f) const;
@@ -268,6 +296,7 @@ private:
 
     struct DeviceState {
         bool connected = false, connecting = false, jobRunning = false;
+        bool homed = false;   // Referenzfahrt seit dem Verbinden; Position gilt bezogen auf die Endschalter
         std::string port, identity, state, lastProblem;
         Vec2 machinePos, wco;
         size_t done = 0, total = 0;
