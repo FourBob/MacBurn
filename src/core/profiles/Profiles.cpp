@@ -217,11 +217,18 @@ const MachineProfile* ProfileStore::machine(const std::string& id) const {
 
 std::vector<ProfileStore::MaterialChoice> ProfileStore::materialsFor(const MachineProfile& mc) const {
     std::vector<MaterialChoice> out;
-    // Zuerst Benutzerprofile genau dieser Maschine.
-    for (const auto& m : materials_)
-        if (m.machine == mc.id)
-            out.push_back({&m, m.source == "user" ? MaterialStatus::Tested
-                             : m.source == "project" ? MaterialStatus::Derived : MaterialStatus::Vendor});
+    // Zuerst Profile genau dieser Maschine. Ein eigenes (getestetes) Profil ersetzt das gleichnamige
+    // Herstellerprofil – sonst stünde das Material doppelt in der Liste und die Wahl nach Kennung träfe das falsche.
+    auto userHas = [&](const std::string& id) {
+        return std::any_of(materials_.begin(), materials_.end(),
+                           [&](const MaterialProfile& u) { return u.machine == mc.id && u.source == "user" && u.id == id; });
+    };
+    for (const auto& m : materials_) {
+        if (m.machine != mc.id) continue;
+        if (m.source != "user" && userHas(m.id)) continue;
+        out.push_back({&m, m.source == "user" ? MaterialStatus::Tested
+                         : m.source == "project" ? MaterialStatus::Derived : MaterialStatus::Vendor});
+    }
     // Dann Klassenprofile gleicher Lasertechnik, sofern nicht schon getestet vorhanden.
     auto tech = [](const std::string& pc) { return pc.substr(0, pc.find('-')); };
     for (const auto& m : materials_) {

@@ -110,6 +110,20 @@ TEST(user_profile_shadows_system_profile) {
     CHECK(c[0].status == MaterialStatus::Tested);
 }
 
+TEST(user_profile_shadows_vendor_profile_of_same_machine) {
+    ProfileStore store;
+    MachineProfile m; m.id = "mecpow/x3-pro"; m.powerClass = "diode-10w-445nm"; m.opticalPowerW = 10;
+    store.add(m);
+    MaterialProfile vendor; vendor.id = "plywood-poplar-3mm"; vendor.name = "Pappel"; vendor.machine = m.id;
+    vendor.source = "system"; vendor.intents[Intent::Cut] = {250.0, 100.0, {}, 1, {}, {}, {}};
+    MaterialProfile usr = vendor; usr.source = "user"; usr.intents[Intent::Cut].speed = 310.0;
+    store.add(vendor); store.add(usr);   // Herstellerprofil zuerst geladen – wie im Programm
+    auto c = store.materialsFor(*store.machine(m.id));
+    CHECK(c.size() == 1);
+    CHECK(c[0].status == MaterialStatus::Tested);
+    NEAR(*c[0].material->intents.at(Intent::Cut).speed, 310);
+}
+
 TEST(scanline_fill_square) {
     Polyline sq = Polyline::rectangle(0, 0, 10, 10);
     auto lines = JobBuilder::scanlineFill({&sq}, 1.0);
