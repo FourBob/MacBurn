@@ -87,7 +87,7 @@ std::optional<Vec2> AppController::offsetFor() const {
 }
 
 PrimaryAction AppController::primaryAction() const {
-    if (phase_ != Phase::Laser) return PrimaryAction::GoToLaser;
+    if (!atLaser()) return PrimaryAction::GoToLaser;
     if (dev_.connecting) return PrimaryAction::Connecting;
     if (!dev_.connected) return PrimaryAction::Connect;
     if (dev_.state.rfind("Alarm", 0) == 0) return PrimaryAction::Unlock;
@@ -185,7 +185,7 @@ void AppController::unlock() {
 
 void AppController::frame() {
     if (!deviceIdle()) return;
-    if (test_) {
+    if (inTest()) {
         auto off = testOffset();
         if (!off) { message_ = "Von hier aus ragt die Testplatte über die Arbeitsfläche."; changed(); return; }
         lockedHead_ = headForPlacement();
@@ -228,8 +228,8 @@ void AppController::frame() {
 std::vector<PreflightCheck> AppController::preflight() const {
     std::vector<PreflightCheck> c;
     auto* m = machine();
-    auto off = test_ ? testOffset() : offsetFor();
-    if (test_) {
+    auto off = inTest() ? testOffset() : offsetFor();
+    if (inTest()) {
         c.push_back({"Testplatte liegt auf der Arbeitsfläche", off ? "Linke untere Ecke am Laserkopf." : "Kopf verschieben.", true, bool(off)});
         c.push_back({"Laser bereit", deviceIdle() ? "Verbunden" : "Nicht bereit: " + grbl::describeState(dev_.state), true, deviceIdle()});
         c.push_back({"Fokus eingestellt", m && !m->focusHint.empty() ? m->focusHint : "Laser auf die Materialoberfläche fokussieren.", false});
@@ -267,13 +267,13 @@ std::vector<PreflightCheck> AppController::preflight() const {
 
 void AppController::startJob(bool forTest) {
     if (!deviceIdle()) return;
-    if (forTest != test_.has_value()) {
+    if (forTest != inTest()) {
         // Prüffenster gehörte zu einem anderen Auftrag (Modus inzwischen gewechselt)
         message_ = "Die Startprüfung gehörte zu einem anderen Auftrag. Bitte erneut auf „Lasern …“ klicken.";
         changed();
         return;
     }
-    if (test_) {
+    if (inTest()) {
         auto off = testOffset();
         auto* m = machine();
         if (!off || !m) return;
@@ -463,7 +463,7 @@ void AppController::addDeviceFields(std::vector<Field>& f) const {
         f.push_back(d);
     }
     if (!dev_.connected) {
-        if (test_) return;   // Materialtest hat eigene Felder
+        if (inTest()) return;   // Materialtest hat eigene Felder
         f.push_back({Field::Kind::Header, "", "Auftrag"});
         f.push_back({Field::Kind::Info, "", "Geschätzte Laufzeit: " + estimateText()});
         return;
@@ -489,7 +489,7 @@ void AppController::addDeviceFields(std::vector<Field>& f) const {
     f.push_back(h);
     if (alarm) f.push_back({Field::Kind::Button, "unlock", "Entsperren ohne Referenzfahrt"});
 
-    if (test_) return;   // Materialtest hat eigene Felder
+    if (inTest()) return;   // Materialtest hat eigene Felder
     f.push_back({Field::Kind::Header, "", "Auftrag"});
     Field origin{Field::Kind::Choice, "origin", "Position", {"Wie auf der Fläche", "Am Laserkopf"}};
     origin.selected = origin_;

@@ -67,7 +67,7 @@ void AppController::startMaterialTest(bool newMaterial) {
     }
     test_ = t;
     lockedHead_.reset();
-    phase_ = Phase::Laser;
+    phase_ = Phase::Test;
     message_ = "Materialtest: Werte prüfen, Kopf auf eine freie Stelle des Materials fahren, Rahmen abfahren, dann lasern.";
     changed();
 }
@@ -75,6 +75,7 @@ void AppController::startMaterialTest(bool newMaterial) {
 void AppController::endMaterialTest() {
     test_.reset();
     lockedHead_.reset();
+    if (phase_ == Phase::Test) phase_ = Phase::Laser;
     message_.clear();
     changed();
 }
@@ -116,7 +117,7 @@ bool AppController::setTestNumber(const std::string& key, double v) {
 }
 
 void AppController::addTestFields(std::vector<Field>& f) const {
-    if (!test_) return;
+    if (!inTest()) return;
     const auto& t = *test_;
     const auto& s = t.spec;
     auto num = [&](const char* key, const char* label, double v, double lo, double hi, double step, const char* unit, bool en = true) {

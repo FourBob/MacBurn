@@ -68,7 +68,7 @@ struct PaletteItem {
 };
 
 // Zeichenwerkzeuge
-enum class Tool { Select, Line, Rect, Ellipse, Triangle, Polygon, Star, Polyline, Text };
+enum class Tool { Select, Line, Rect, Ellipse, Triangle, Polygon, Star, Polyline, Text, Lasso };
 
 struct ToolItem {
     Tool tool;
@@ -180,7 +180,10 @@ public:
     // newMaterial: neues Material anlegen; sonst das gewählte Material einmessen
     void startMaterialTest(bool newMaterial);
     void endMaterialTest();
-    bool materialTestActive() const { return test_.has_value(); }
+    bool materialTestActive() const { return inTest(); }
+    // Lasern oder Materialtest: Gerätesteuerung sichtbar, Zeichnen gesperrt
+    bool atLaser() const { return phase_ == Phase::Laser || phase_ == Phase::Test; }
+    bool inTest() const { return phase_ == Phase::Test && test_.has_value(); }
 
     // --- Gerät ---
     PrimaryAction primaryAction() const;
@@ -279,6 +282,10 @@ private:
     Vec2 headForPlacement() const { return lockedHead_ ? *lockedHead_ : workPos(); }
 
     ObjectSet selection_;
+    // Auswahl durch Umfahren: Lasso (freie Linie) oder Rechteck (Auswahlwerkzeug auf leerer Fläche)
+    struct Marquee { std::vector<Vec2> path; Vec2 start; bool rect = false; bool extend = false; };
+    std::optional<Marquee> marquee_;
+    void finishMarquee();
     bool lockRatio_ = true;
     struct Drag {
         Document before;

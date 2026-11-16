@@ -33,13 +33,17 @@ Die Tests laufen ohne Fenster und ohne Hardware; die Gerätesteuerung wird gegen
 
 ## Bedienung
 
-### Drei Phasen
+### Vier Phasen
 
 | Phase | Kurzbefehl | Wofür |
 |---|---|---|
 | **Gestalten** | ⌘1 | Formen importieren, anordnen, bearbeiten |
 | **Vorbereiten** | ⌘2 | Absicht je Ebene, Werte aus dem Material, Brennvorschau mit Leerfahrten |
 | **Lasern** | ⌘3 | Verbinden, Bewegen, Rahmen, Auftrag mit Startprüfung |
+| **Materialtest** | ⌘4 | Testplatte statt Design brennen, Skala ablesen, Werte als ✓ speichern |
+
+Der Materialtest ist eine eigene Phase: Solange sie gewählt ist, zeigt die Fläche die Testplatte, nicht das
+Design. Wer zwischendurch zu einer anderen Phase wechselt, findet den Test beim Zurückkehren unverändert vor.
 
 ### Maschine → Material
 
@@ -68,7 +72,8 @@ Die Werkzeugleiste links auf der Zeichenfläche (oder die Taste, solange die Fl�
 
 | Werkzeug | Taste | Bedienung |
 |---|---|---|
-| Auswahl | V | auswählen, verschieben, Anfasser |
+| Auswahl | V | auswählen, verschieben, Anfasser; auf leerer Fläche ziehen = Auswahlrechteck |
+| Lasso | Q | frei um Objekte herumziehen (erfasst wird, was ganz innen liegt; ⇧ ergänzt); danach wieder Auswahl |
 | Linie | L | ziehen; ⇧ = 45°-Schritte |
 | Rechteck | R | ziehen; ⇧ = Quadrat; Eckenradius im Inspektor |
 | Ellipse | E | ziehen; ⇧ = Kreis |
@@ -132,7 +137,7 @@ Sichern. *In Pfade umwandeln* macht daraus normale Formen; beim Kombinieren gesc
 
 ### Materialtest
 
-*Laser › Material testen …* (oder in der Materialauswahl *Dieses Material testen …* / *Neues Material testen …*).
+Phase *Materialtest* (⌘4), *Laser › Material testen …* (oder in der Materialauswahl *Dieses Material testen …* / *Neues Material testen …*).
 Statt eines Rasters aus Kästchen brennt MacBurn eine kleine Testplatte (ca. 83 × 31 mm, gut 3 Minuten):
 
 - **Gravurstreifen:** Leistung steigt stufenlos (z. B. 5 → 100 %), darunter eine Skala 0–100.
@@ -181,9 +186,9 @@ im Schließknopf; vor dem Schließen fragt MacBurn nach.
 | ⌘G / ⇧⌘G | Gruppieren / Gruppierung aufheben |
 | ⌥1 / ⌥2 / ⌥3 | Farbe Rot (Schneiden) / Blau (Gravieren) / Grün (Markieren) |
 | ← → ↑ ↓ | Auswahl um 1 mm verschieben (⇧: 10 mm); in *Lasern* verbunden: Kopf bewegen |
-| V L R E D P S N T | Werkzeuge: Auswahl, Linie, Rechteck, Ellipse, Dreieck, Polygon, Stern, Polylinie, Text |
+| V Q L R E D P S N T | Werkzeuge: Auswahl, Lasso, Linie, Rechteck, Ellipse, Dreieck, Polygon, Stern, Polylinie, Text |
 | ↩ | Polylinie beenden |
-| ⌘1 / ⌘2 / ⌘3 | Gestalten / Vorbereiten / Lasern |
+| ⌘1 / ⌘2 / ⌘3 / ⌘4 | Gestalten / Vorbereiten / Lasern / Materialtest |
 | ⌘K / ⇧⌘K | Laser verbinden / trennen |
 | ⌥⌘H | Referenzfahrt |
 | ⌘R | Rahmen abfahren |

@@ -503,6 +503,56 @@ TEST(manual_command_needs_connection) {
     CHECK(c.sendManualCommand("   ").empty());   // leer: nichts zu tun
 }
 
+TEST(selection_rectangle_and_lasso) {
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    c.setPhase(Phase::Design);
+    // Auswahlrechteck: auf leerer Fläche (außerhalb) beginnen und alles umfassen
+    c.pointerDown({-40, -40}, 1, false);
+    c.pointerDrag({900, 900});
+    CHECK(c.renderList().marquee.size() == 4);
+    c.pointerUp();
+    CHECK(c.hasSelection());
+    CHECK(c.renderList().marquee.empty());
+    // Kleines Rechteck daneben: nichts liegt ganz innen
+    c.pointerDown({-40, -40}, 1, false);
+    c.pointerDrag({-20, -20});
+    c.pointerUp();
+    CHECK(!c.hasSelection());
+    // Lasso um alles herum, dann zurück zum Auswahlwerkzeug
+    c.setTool(Tool::Lasso);
+    c.pointerDown({-50, -50}, 1, false);
+    for (Vec2 q : {Vec2{900, -50}, Vec2{900, 900}, Vec2{-50, 900}, Vec2{-50, -40}}) c.pointerDrag(q);
+    c.pointerUp();
+    CHECK(c.hasSelection());
+    CHECK(c.tool() == Tool::Select);
+    // Lasso, das nur einen Teil umfasst, erfasst kein halbes Objekt
+    c.setTool(Tool::Lasso);
+    c.pointerDown({-50, -50}, 1, false);
+    for (Vec2 q : {Vec2{5, -50}, Vec2{5, 900}, Vec2{-50, 900}}) c.pointerDrag(q);
+    c.pointerUp();
+    CHECK(!c.hasSelection());
+}
+
+TEST(material_test_is_own_phase) {
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    c.setPhase(Phase::Test);                       // erster Wechsel startet den Test
+    CHECK(c.phase() == Phase::Test);
+    CHECK(c.materialTestActive());
+    CHECK(c.primaryAction() == PrimaryAction::Connect);
+    c.setString("testName", "Mein Test");
+    c.setPhase(Phase::Laser);                      // normales Lasern: keine Testfelder
+    CHECK(!c.materialTestActive());
+    bool testFields = false;
+    for (auto& f : c.inspector()) if (f.key == "testSave") testFields = true;
+    CHECK(!testFields);
+    c.setPhase(Phase::Test);                       // zurück: Test ist noch da
+    bool name = false;
+    for (auto& f : c.inspector()) if (f.label.find("Mein Test") != std::string::npos || f.text == "Mein Test") name = true;
+    CHECK(name);
+    c.endMaterialTest();
+    CHECK(c.phase() == Phase::Laser);
+}
+
 TEST(anchor_points) {
     Rect r{10, 20, 100, 40};
     Vec2 c = anchorPoint(r, 4);
@@ -1265,7 +1315,7 @@ TEST(material_test_flow_saves_tested_profile) {
         for (auto& f : c.inspector()) if (f.label.find("Material: Birke") != std::string::npos) birke = true;
         CHECK(birke);
         for (size_t i = 0; i < items.size(); ++i) if (items[i].title.find("Pappel") != std::string::npos) c.selectMaterial(int(i));
-        CHECK(c.phase() == Phase::Laser);
+        CHECK(c.phase() == Phase::Test);
         bool save = false;
         for (auto& f : c.inspector()) if (f.key == "testSave") save = f.enabled;
         CHECK(!save);                                  // erst nach dem Ablesen

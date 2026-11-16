@@ -134,7 +134,7 @@ static NSTextField* small(NSString* s, BOOL secondary) {
             else core->clearSelection();
         } else if (del) {
             core->deleteSelection();
-        } else if (core->phase() == mb::Phase::Laser && core->deviceConnected()) {
+        } else if (core->atLaser() && core->deviceConnected()) {
             core->jog(dx, dy);
         } else {
             double step = shift ? 10 : 1;
@@ -150,7 +150,7 @@ static NSTextField* small(NSString* s, BOOL secondary) {
     _canvas.onDoubleClick = ^(double x, double y) { core->pointerDoubleClick({x, y}); };
     _canvas.onReturn = ^BOOL { return core->finishCreation(); };
     _canvas.onCharacter = ^BOOL(NSString* chars) {
-        if (core->phase() == mb::Phase::Laser) return NO;
+        if (core->atLaser()) return NO;
         return core->selectToolByKey(STD(chars));
     };
     _canvas.onPointer = ^(int phase, double x, double y, double tol, BOOL shift) {
@@ -295,7 +295,7 @@ static NSTextField* small(NSString* s, BOOL secondary) {
 - (NSToolbarItem*)toolbar:(NSToolbar*)tb itemForItemIdentifier:(NSToolbarItemIdentifier)ident willBeInsertedIntoToolbar:(BOOL)flag {
     NSToolbarItem* it = [[NSToolbarItem alloc] initWithItemIdentifier:ident];
     if ([ident isEqual:kPhase]) {
-        _phase = [NSSegmentedControl segmentedControlWithLabels:@[@"Gestalten", @"Vorbereiten", @"Lasern"]
+        _phase = [NSSegmentedControl segmentedControlWithLabels:@[@"Gestalten", @"Vorbereiten", @"Lasern", @"Materialtest"]
                                                    trackingMode:NSSegmentSwitchTrackingSelectOne
                                                          target:self action:@selector(phaseChanged:)];
         _phase.selectedSegment = 0;
@@ -542,7 +542,7 @@ static NSTextField* small(NSString* s, BOOL secondary) {
 // Nur Statusleiste und Zeichenfläche (häufige Positionsmeldungen)
 - (void)refreshStatus {
     _status.stringValue = NS(_core->statusText());
-    if (_core->phase() == mb::Phase::Laser) [_canvas setRenderList:_core->renderList()];
+    if (_core->atLaser()) [_canvas setRenderList:_core->renderList()];
 }
 
 - (void)refresh {
@@ -593,8 +593,8 @@ static NSTextField* small(NSString* s, BOOL secondary) {
     [_canvas setRenderList:_core->renderList()];
     [_inspector showFields:_core->inspector()];
     // Werkzeuge nur beim Gestalten und Vorbereiten
-    _tools.superview.hidden = _core->phase() == mb::Phase::Laser;
-    _palette.superview.hidden = _core->phase() == mb::Phase::Laser;
+    _tools.superview.hidden = _core->atLaser();
+    _palette.superview.hidden = _core->atLaser();
     auto pal = _core->paletteItems();
     for (NSButton* b in _palette.arrangedSubviews) {
         size_t i = size_t(b.tag);
@@ -603,7 +603,7 @@ static NSTextField* small(NSString* s, BOOL secondary) {
         b.layer.borderColor = NSColor.labelColor.CGColor;
     }
     for (NSButton* b in _tools.arrangedSubviews) b.state = b.tag == NSInteger(_core->tool()) ? NSControlStateValueOn : NSControlStateValueOff;
-    _canvas.crosshair = _core->tool() != mb::Tool::Select && _core->phase() != mb::Phase::Laser;
+    _canvas.crosshair = _core->tool() != mb::Tool::Select && !_core->atLaser();
     _status.stringValue = NS(_core->statusText());
 }
 

@@ -173,8 +173,8 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
     [object addItem:item(@"Gruppierung aufheben", @selector(ungroupCore:), @"g", NSEventModifierFlagCommand | NSEventModifierFlagShift)];
 
     NSMenu* view = [[NSMenu alloc] initWithTitle:@"Darstellung"];
-    NSArray* phases = @[@"Gestalten", @"Vorbereiten", @"Lasern"];
-    for (NSInteger i = 0; i < 3; ++i) {
+    NSArray* phases = @[@"Gestalten", @"Vorbereiten", @"Lasern", @"Materialtest"];
+    for (NSInteger i = 0; i < 4; ++i) {
         NSMenuItem* p = item(phases[i], @selector(showPhase:), [NSString stringWithFormat:@"%ld", i + 1]);
         p.tag = i;
         [view addItem:p];
@@ -282,7 +282,7 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
 - (void)flipVCore:(id)sender { _core->flipSelection(false); }
 - (void)centerCore:(id)sender { _core->centerSelection(); }
 
-- (void)laserConnect:(id)sender { _core->setPhase(mb::Phase::Laser); _core->connect(); }
+- (void)laserConnect:(id)sender { if (!_core->atLaser()) _core->setPhase(mb::Phase::Laser); _core->connect(); }
 - (void)laserDisconnect:(id)sender { _core->disconnect(); }
 - (void)laserHome:(id)sender { _core->home(); }
 - (void)laserFrame:(id)sender { _core->frame(); }

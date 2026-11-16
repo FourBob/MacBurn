@@ -10,7 +10,7 @@
 
 namespace mb {
 
-enum class Phase { Design, Prepare, Laser };
+enum class Phase { Design, Prepare, Laser, Test };   // Test: Materialtest (eigene Phase)
 
 struct Stroke {
     std::vector<Vec2> points;
@@ -27,6 +27,7 @@ struct RenderList {
     std::optional<Rect> jobFrame;   // Umriss des Auftrags auf der Maschine
     std::optional<Rect> selection;  // Rahmen um die Auswahl
     std::vector<Vec2> handles;      // 8 Größen-Anfasser, dann der Dreh-Anfasser (mm)
+    std::vector<Vec2> marquee;      // Lasso bzw. Auswahlrechteck, solange gezogen wird (mm)
 };
 
 // Gestalten: Ebenenfarben. Vorbereiten: Brennfarbe + Leerfahrten. Lasern: Brennfarbe.

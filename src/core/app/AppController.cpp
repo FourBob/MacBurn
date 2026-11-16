@@ -123,7 +123,12 @@ void AppController::editLayer(const std::string& label, std::function<void(Layer
 
 // ---------- Befehle ----------
 
-void AppController::setPhase(Phase p) { phase_ = p; changed(); }
+void AppController::setPhase(Phase p) {
+    if (p == Phase::Test && !test_) { startMaterialTest(false); return; }   // erster Wechsel: Test mit dem gewählten Material
+    if (p != phase_) lockedHead_.reset();
+    phase_ = p;
+    changed();
+}
 
 void AppController::selectMachine(int index) {
     // Material über die gemeinsame Kennung auf die neue Maschine übertragen.
@@ -145,7 +150,10 @@ void AppController::selectMaterial(int index) {
     settingsDirty_ = true;
     saveLastChoice();
     // Läuft ein Materialtest für das gewählte Material, mit dem neuen Material neu aufsetzen
-    if (test_ && !test_->newMaterial && !dev_.jobRunning) { startMaterialTest(false); return; }
+    if (test_ && !test_->newMaterial && !dev_.jobRunning) {
+        if (inTest()) { startMaterialTest(false); return; }
+        test_.reset();   // Test im Hintergrund passt nicht mehr zum Material – beim nächsten Wechsel neu aufsetzen
+    }
     changed();
 }
 void AppController::selectLayer(int index) { layer_ = index; changed(); }
@@ -535,7 +543,7 @@ std::vector<Field> AppController::inspector() const {
     auto* m = machine();
     auto* mat = material();
 
-    if (phase_ == Phase::Laser) {
+    if (atLaser()) {
         addDeviceFields(f);
         addTestFields(f);
         f.push_back({Field::Kind::Header, "", "Maschine"});
@@ -552,7 +560,7 @@ std::vector<Field> AppController::inspector() const {
 
     addToolFields(f);
     addTextFields(f);
-    if (tool_ == Tool::Select) addSelectionFields(f);
+    if (tool_ == Tool::Select || tool_ == Tool::Lasso) addSelectionFields(f);
     if (layer_ < 0 || layer_ >= int(doc_.layers.size())) return f;
     const Layer& l = doc_.layers[size_t(layer_)];
     f.push_back({Field::Kind::Header, "", "Ebene " + l.name});
@@ -614,7 +622,7 @@ std::vector<Field> AppController::inspector() const {
 
 std::string AppController::estimateText() const {
     auto* m = machine();
-    const Job& j = test_ ? testPlate().job : job_;   // im Materialtest: Zeit der Testplatte
+    const Job& j = inTest() ? testPlate().job : job_;   // im Materialtest: Zeit der Testplatte
     double s = m ? estimateSeconds(j, m->travelSpeedMmMin, m->accelerationMmS2) : estimateSeconds(j, 3000);
     int t = int(std::lround(s));
     char b[32];
@@ -645,7 +653,7 @@ std::string AppController::primaryActionTitle() const {
         case PrimaryAction::GoToLaser: return "Weiter zum Lasern";
         case PrimaryAction::Connect: return "Verbinden";
         case PrimaryAction::Connecting: return "Verbinde …";
-        case PrimaryAction::StartJob: return test_ ? "Test lasern …" : "Lasern …";
+        case PrimaryAction::StartJob: return inTest() ? "Test lasern …" : "Lasern …";
         case PrimaryAction::Pause: return "Pause";
         case PrimaryAction::Resume: return "Fortsetzen";
         case PrimaryAction::Unlock: return "Entsperren";
@@ -658,11 +666,16 @@ std::string AppController::redoTitle() const { return canRedo() ? "Wiederholen: 
 
 RenderList AppController::renderList() const {
     RenderList rl = buildRenderList(doc_, job_, phase_, workArea());
-    if (!selection_.empty() && phase_ != Phase::Laser) {
+    if (!selection_.empty() && !atLaser()) {
         rl.selection = doc_.bounds(selection_);
         rl.handles = selectionHandles();
     }
-    if (phase_ == Phase::Laser && test_) {
+    if (marquee_ && !atLaser()) {
+        rl.marquee = marquee_->path;
+        rl.selection.reset();   // während des Umfahrens keine Anfasser
+        rl.handles.clear();
+    }
+    if (inTest()) {
         // Statt des Designs: die Testplatte am Laserkopf (ohne Verbindung bei 10/10)
         auto plate = testPlate();
         Vec2 off = testOffset().value_or(dev_.connected ? headForPlacement() : Vec2{10, 10});
@@ -676,7 +689,7 @@ RenderList AppController::renderList() const {
         if (dev_.connected) rl.head = workPos();
         return rl;
     }
-    if (phase_ == Phase::Laser) {
+    if (atLaser()) {
         if (dev_.connected) rl.head = workPos();
         if (auto off = offsetFor()) {
             Rect b = outputBounds();

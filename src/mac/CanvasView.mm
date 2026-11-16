@@ -90,6 +90,27 @@
         CGPathRelease(p);
     }
 
+    // Lasso bzw. Auswahlrechteck
+    if (_list.marquee.size() >= 2) {
+        CGMutablePathRef mp = CGPathCreateMutable();
+        for (size_t i = 0; i < _list.marquee.size(); ++i) {
+            CGPoint q = CGPointApplyAffineTransform(CGPointMake(_list.marquee[i].x, _list.marquee[i].y), t);
+            if (i == 0) CGPathMoveToPoint(mp, nullptr, q.x, q.y); else CGPathAddLineToPoint(mp, nullptr, q.x, q.y);
+        }
+        CGPathCloseSubpath(mp);
+        CGContextAddPath(ctx, mp);
+        CGContextSetFillColorWithColor(ctx, [NSColor.controlAccentColor colorWithAlphaComponent:0.08].CGColor);
+        CGContextFillPath(ctx);
+        CGContextAddPath(ctx, mp);
+        CGFloat dash[] = {4, 3};
+        CGContextSetLineDash(ctx, 0, dash, 2);
+        CGContextSetStrokeColorWithColor(ctx, NSColor.controlAccentColor.CGColor);
+        CGContextSetLineWidth(ctx, 1);
+        CGContextStrokePath(ctx);
+        CGContextSetLineDash(ctx, 0, nullptr, 0);
+        CGPathRelease(mp);
+    }
+
     // Auswahl mit Anfassern (Positionen liefert der Kern)
     if (_list.selection && _list.handles.size() == 9) {
         auto P = [&](size_t i) { return CGPointApplyAffineTransform(CGPointMake(_list.handles[i].x, _list.handles[i].y), t); };

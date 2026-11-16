@@ -20,6 +20,7 @@ const char* toolName(Tool t) {
         case Tool::Star: return "Stern";
         case Tool::Polyline: return "Polylinie";
         case Tool::Text: return "Text";
+        case Tool::Lasso: return "Lasso";
     }
     return "";
 }
@@ -40,6 +41,7 @@ int circleSegments(double r) {
 std::vector<ToolItem> AppController::toolItems() const {
     std::vector<ToolItem> items = {
         {Tool::Select, "cursorarrow", "Auswahl", "V"},
+        {Tool::Lasso, "lasso", "Lasso", "Q"},
         {Tool::Line, "line.diagonal", "Linie", "L"},
         {Tool::Rect, "rectangle", "Rechteck", "R"},
         {Tool::Ellipse, "circle", "Ellipse", "E"},
@@ -57,6 +59,7 @@ void AppController::setTool(Tool t) {
     cancelCreation();
     tool_ = t;
     if (t == Tool::Text) message_ = "Text: auf die Fläche klicken und lostippen.";
+    else if (t == Tool::Lasso) message_ = "Lasso: um die Objekte herumziehen – ausgewählt wird, was ganz innen liegt. ⇧ ergänzt die Auswahl.";
     else if (t != Tool::Select) message_ = std::string(toolName(t)) +
         (t == Tool::Polyline ? ": Punkte klicken, Doppelklick oder ↩ beendet, Esc bricht ab."
                              : ": auf der Fläche ziehen, ⇧ für gleichmäßige Form. Ein Klick legt sie in 20 mm an.");
@@ -172,7 +175,7 @@ void AppController::addCreatedShape(const Document& before, Polyline shape) {
 }
 
 void AppController::createFromFields(std::optional<Vec2> at) {
-    if (tool_ == Tool::Select || tool_ == Tool::Polyline) return;
+    if (tool_ == Tool::Select || tool_ == Tool::Polyline || tool_ == Tool::Lasso) return;
     Document before = create_ ? create_->before : doc_;
     drawingLayer();
     Polyline shape;
@@ -245,7 +248,7 @@ bool AppController::finishCreation() {
         commitCreate(false);
         return true;
     }
-    if (tool_ == Tool::Select || create_) return false;
+    if (tool_ == Tool::Select || tool_ == Tool::Lasso || create_) return false;
     createFromFields(std::nullopt);   // ↩ mit aktivem Werkzeug: Form aus den Maßen im Inspektor
     return true;
 }
@@ -259,7 +262,7 @@ bool AppController::cancelCreation() {
 }
 
 void AppController::addToolFields(std::vector<Field>& f) const {
-    if (tool_ == Tool::Select || tool_ == Tool::Text) return;   // Text hat eigene Felder
+    if (tool_ == Tool::Select || tool_ == Tool::Text || tool_ == Tool::Lasso) return;   // Text hat eigene Felder
     f.push_back({Field::Kind::Header, "", std::string("Werkzeug: ") + toolName(tool_)});
     auto num = [&](const char* key, const char* label, double v, double lo, double hi, double step, const char* unit) {
         Field x{Field::Kind::Number, key, label};

@@ -47,10 +47,15 @@ std::vector<Vec2> AppController::selectionHandles() const {
 
 void AppController::pointerDown(Vec2 p, double tol, bool extend) {
     if (!canEdit()) return;
-    if (tool_ == Tool::Text && phase_ != Phase::Laser) { createText(p); return; }
-    if (tool_ != Tool::Select && phase_ != Phase::Laser) { beginCreate(p); return; }
+    if (tool_ == Tool::Lasso && !atLaser()) {
+        marquee_ = Marquee{{p}, p, false, extend};
+        drag_.reset();
+        return;
+    }
+    if (tool_ == Tool::Text && !atLaser()) { createText(p); return; }
+    if (tool_ != Tool::Select && !atLaser()) { beginCreate(p); return; }
     // Zuerst die Anfasser der aktuellen Auswahl
-    if (!selection_.empty() && !extend && phase_ != Phase::Laser) {
+    if (!selection_.empty() && !extend && !atLaser()) {
         auto hs = selectionHandles();
         for (int i = int(hs.size()) - 1; i >= 0; --i) {
             if ((hs[size_t(i)] - p).length() <= tol * 1.2) {
@@ -63,6 +68,8 @@ void AppController::pointerDown(Vec2 p, double tol, bool extend) {
     if (!hit) {
         if (!extend) selection_.clear();
         drag_.reset();
+        // Auf leerer Fläche ziehen: Auswahlrechteck
+        if (!atLaser()) marquee_ = Marquee{{p}, p, true, extend};
         changed();
         return;
     }
@@ -79,6 +86,17 @@ void AppController::pointerDown(Vec2 p, double tol, bool extend) {
 }
 
 void AppController::pointerDrag(Vec2 p, bool shift) {
+    if (marquee_) {
+        auto& m = *marquee_;
+        if (m.rect) {
+            Vec2 a = m.start;
+            m.path = {a, {p.x, a.y}, p, {a.x, p.y}};
+        } else if ((p - m.path.back()).length() * pxPerMm_ >= 2) {   // alle 2 Bildpunkte ein Punkt
+            m.path.push_back(p);
+        }
+        changed();
+        return;
+    }
     if (create_) { if (tool_ != Tool::Polyline) updateCreate(p, shift); return; }
     if (!drag_ || selection_.empty()) return;
     Vec2 d = p - drag_->start;
@@ -119,6 +137,7 @@ void AppController::pointerDrag(Vec2 p, bool shift) {
 }
 
 void AppController::pointerUp() {
+    if (marquee_) { finishMarquee(); return; }
     if (create_ && tool_ != Tool::Polyline) { commitCreate(!create_->dragged); return; }
     if (drag_ && drag_->moved) {
         Document before = drag_->before, after = doc_;
@@ -128,6 +147,45 @@ void AppController::pointerUp() {
         if (drag_->handle == 8) message_.clear();
     }
     drag_.reset();
+    changed();
+}
+
+namespace {
+// Gerade-Ungerade-Regel: liegt q im (geschlossen gedachten) Polygon?
+bool insidePolygon(const std::vector<Vec2>& poly, Vec2 q) {
+    bool in = false;
+    for (size_t i = 0, j = poly.size() - 1; i < poly.size(); j = i++) {
+        const Vec2 &a = poly[i], &b = poly[j];
+        if ((a.y > q.y) != (b.y > q.y) && q.x < (b.x - a.x) * (q.y - a.y) / (b.y - a.y) + a.x) in = !in;
+    }
+    return in;
+}
+} // namespace
+
+void AppController::finishMarquee() {
+    Marquee m = std::move(*marquee_);
+    marquee_.reset();
+    bool lasso = !m.rect;
+    if (m.path.size() < 3) {   // nur geklickt
+        if (lasso && !m.extend) selection_.clear();
+        changed();
+        return;
+    }
+    // Ausgewählt wird jedes Objekt, das vollständig innerhalb liegt.
+    std::map<uint32_t, bool> inside;
+    for (const auto& s : doc_.shapes) {
+        bool all = !s.path.points.empty();
+        for (const auto& q : s.path.points) if (!insidePolygon(m.path, q)) { all = false; break; }
+        auto it = inside.find(s.object);
+        inside[s.object] = (it == inside.end() ? true : it->second) && all;
+    }
+    if (!m.extend) selection_.clear();
+    size_t found = 0;
+    for (const auto& [obj, in] : inside) if (in) { selection_.insert(obj); ++found; }
+    if (lasso) tool_ = Tool::Select;   // gleich verschieben, drehen, skalieren können
+    message_ = found ? std::to_string(found) + (found == 1 ? " Objekt" : " Objekte") + " ausgewählt."
+                     : "Nichts ausgewählt – nur Objekte, die ganz innerhalb liegen, werden erfasst.";
+    for (const auto& s : doc_.shapes) if (selection_.count(s.object)) { layer_ = int(s.layer); break; }
     changed();
 }
 
