@@ -10,8 +10,9 @@ Freie, native Laser-Software für macOS. Gestalten, vorbereiten und lasern mit G
 - Referenzmaschine: Mecpow X3 Pro (10 W)
 - Konzept und Release-Plan: [docs/Konzept.md](docs/Konzept.md)
 
-> **Stand:** frühe Entwicklungsversion (v0.1 in Arbeit). Verbinden, Bewegen und Rahmen sind am X3 Pro getestet,
-> ein Auftrag mit Laserstrahl noch nicht. Bitte nur unter Aufsicht und mit Schutzbrille verwenden.
+> **Stand:** frühe Entwicklungsversion (v0.1 in Arbeit). Verbinden, Bewegen, Rahmen, Materialtest und Aufträge
+> mit Laserstrahl laufen am X3 Pro; *Fortsetzen nach Abbruch* ist dort noch nicht erprobt. Bitte nur unter
+> Aufsicht und mit Schutzbrille verwenden.
 
 ## Voraussetzungen
 
@@ -123,7 +124,7 @@ Schneller über die Tastatur oder das Menü *Objekt › Farbe*:
 | Grün | ⌥3 | Markieren |
 
 Mit Auswahl kommen die Formen in die Ebene dieser Farbe – vorhandene Ebenen werden erkannt (z. B. „Rot“ aus
-einem SVG oder „Schnitt“ aus dem Beispiel), fehlende angelegt, leer gewordene entfernt. Ohne Auswahl wählt die
+einem SVG oder „Schnitt“ aus der Startvorlage), fehlende angelegt, leer gewordene entfernt. Ohne Auswahl wählt die
 Taste die Farbe für die nächsten gezeichneten Formen. Im Inspektor legt das Feld *Ebene* die Auswahl in jede
 vorhandene Ebene.
 
@@ -273,11 +274,28 @@ Ohne Argument listet es die USB-Anschlüsse.
 src/core/      C++-Kern (ohne Cocoa): app, device, document, geometry, io, job, profiles, render, util
 src/mac/       dünne Cocoa-Schicht (.mm)
 profiles/      Maschinenbibliothek und Materialprofile (JSON)
-examples/      Beispieldateien
+resources/     App-Symbol (MacBurn.icns)
+examples/      Startvorlage und Beispieldateien
 tests/         Kerntests
-tools/         mbprobe
+tools/         mbprobe, make_icon (App-Symbol), trace_logo (Startvorlage)
 third_party/   Fremdbibliotheken, unverändert
-docs/          Konzept und UI-Entwurf
+docs/          Konzept, UI-Entwurf, Logo
+```
+
+### Logo, App-Symbol und Startvorlage neu erzeugen
+
+Alles entsteht aus [docs/logo/MacBurn-Logo.jpg](docs/logo/MacBurn-Logo.jpg):
+
+```bash
+clang++ -std=c++20 -fobjc-arc -framework Cocoa tools/make_icon.mm -o build/make_icon
+build/make_icon docs/logo/MacBurn-Logo.jpg resources
+iconutil -c icns resources/MacBurn.iconset -o resources/MacBurn.icns
+mv resources/MacBurn-Logo.png docs/logo/ && rm -r resources/MacBurn.iconset
+```
+
+```bash
+clang++ -std=c++20 -O2 -fobjc-arc -framework Cocoa tools/trace_logo.mm -o build/trace_logo
+build/trace_logo docs/logo/MacBurn-Logo.jpg examples/MacBurn-Logo.svg
 ```
 
 ## Beitragen

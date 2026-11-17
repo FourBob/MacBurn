@@ -2,8 +2,8 @@
 //
 //   clang++ -std=c++20 -fobjc-arc -framework Cocoa tools/make_icon.mm -o build/make_icon
 //   build/make_icon docs/logo/MacBurn-Logo.jpg resources
-//   mv resources/MacBurn-Logo.png docs/logo/ && rm -r resources/MacBurn.iconset
 //   iconutil -c icns resources/MacBurn.iconset -o resources/MacBurn.icns
+//   mv resources/MacBurn-Logo.png docs/logo/ && rm -r resources/MacBurn.iconset
 //
 // Das Bildzeichen (Flamme mit Strahl) wird automatisch freigestellt: alle nicht-weißen
 // Pixel oberhalb des Schriftzugs. Das Symbol liegt auf einer weißen, abgerundeten Fläche
