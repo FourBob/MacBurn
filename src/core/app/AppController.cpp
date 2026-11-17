@@ -436,6 +436,38 @@ void AppController::newDocument() {
     changed();
 }
 
+bool AppController::loadStartTemplate(const std::string& path) {
+    SvgImportResult r = importSvgFile(path);
+    if (!r.ok || r.shapes.empty()) return false;
+    // Rot wird geschnitten, alles andere graviert – in den festen Farben der Ebenenliste
+    Document d;
+    for (const auto& src : r.layers) {
+        Layer l = src;
+        bool cut = src.colorKey == "#ff0000";
+        l.name = cut ? "Schnitt" : "Gravur";
+        l.intent = cut ? Intent::Cut : Intent::Engrave;
+        l.color = cut ? Color{0.898f, 0.200f, 0.180f, 1} : Color{0.141f, 0.388f, 0.922f, 1};
+        l.colorKey = cut ? "#e5332e" : "#2463eb";
+        d.layers.push_back(l);
+    }
+    for (auto s : r.shapes) {
+        s.object = d.layers[s.layer].intent == Intent::Cut ? 1 : 2;   // Schild und Logo getrennt verschiebbar
+        d.shapes.push_back(std::move(s));
+    }
+    doc_ = std::move(d);
+    undo_.clear();
+    savedState_ = undo_.stateId();
+    settingsDirty_ = false;
+    isSample_ = true;   // unverändert gilt sie nicht als geändert, ein Import ersetzt sie
+    path_.clear();
+    std::string name = path.substr(path.find_last_of('/') + 1);
+    title_ = name.size() > 4 ? name.substr(0, name.size() - 4) : name;
+    selection_.clear();
+    layer_ = 0;
+    changed();
+    return true;
+}
+
 AppController::ImportResult AppController::importFile(const std::string& path) {
     std::string ext = path.size() >= 4 ? path.substr(path.size() - 4) : "";
     for (auto& ch : ext) ch = char(std::tolower(static_cast<unsigned char>(ch)));

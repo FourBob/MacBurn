@@ -1393,6 +1393,23 @@ TEST(palette_matches_imported_names_and_creates_layers) {
     CHECK(c.layerRows()[0].name == "Rot");
 }
 
+TEST(start_template_logo) {
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    CHECK(c.loadStartTemplate(std::string(MB_SOURCE_DIR) + "/examples/MacBurn-Logo.svg"));
+    auto rows = c.layerRows();
+    CHECK(rows.size() == 2);
+    CHECK(rows[0].name == "Schnitt" && rows[0].intent == "Schneiden");
+    CHECK(rows[1].name == "Gravur" && rows[1].intent == "Gravieren");
+    CHECK(c.documentTitle() == "MacBurn-Logo");
+    CHECK(!c.isModified());
+    CHECK(!c.canUndo());
+    CHECK(c.estimateText() != "00:00");             // es entsteht ein Auftrag
+    // Ein SVG-Import ersetzt die unveränderte Vorlage
+    c.importFile(std::string(MB_SOURCE_DIR) + "/examples/schild.svg");
+    CHECK(c.documentTitle() == "schild");
+    for (auto& r : c.layerRows()) CHECK(r.name != "Gravur");
+}
+
 TEST(add_layer_from_list) {
     AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
     size_t n = c.layerRows().size();                // Beispiel: Schnitt, Gravur, Ritzen

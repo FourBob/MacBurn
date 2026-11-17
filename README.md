@@ -59,6 +59,13 @@ Wie Drucker → Filament beim 3D-Druck: Oben links wählst du die Maschine, daru
 | ≈ abgeleitet | aus der Leistungsklasse umgerechnet – Materialtest empfohlen |
 | ✎ geändert | im Projekt angepasst |
 
+### Startvorlage
+
+MacBurn startet mit dem eigenen Logo als Laservorlage: ein Schild 76 × 96 mm (Ebene *Schnitt*) mit dem
+gravierten Logo (Ebene *Gravur*). Solange nichts daran geändert ist, gilt sie nicht als ungesichert, und ein
+SVG-Import ersetzt sie. Die Vorlage ist [examples/MacBurn-Logo.svg](examples/MacBurn-Logo.svg); sie entsteht mit
+[tools/trace_logo.mm](tools/trace_logo.mm) aus dem Logo-Bild.
+
 ### SVG importieren
 
 *Ablage › Importieren …* (⌘I), Datei auf die Fläche ziehen oder im Finder *Öffnen mit › MacBurn*.

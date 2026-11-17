@@ -120,6 +120,8 @@ public:
     // SVG importieren: Farben werden zu Ebenen (gleiche Farbe = vorhandene Ebene).
     // Ein unverändertes Beispielprojekt wird dabei ersetzt.
     ImportResult importFile(const std::string& path);
+    // Startvorlage (SVG): Rot = Schnitt, sonst Gravur; gilt wie das Beispiel als unverändert
+    bool loadStartTemplate(const std::string& path);
     // Öffnet .macburn-Projekte und importiert SVG
     ImportResult openFile(const std::string& path);
     ImportResult saveProject(const std::string& path);

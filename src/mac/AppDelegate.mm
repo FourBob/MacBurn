@@ -36,6 +36,10 @@
         if (s) s->_core->log("MAC WACHT AUF");
     }];
 
+    // Startvorlage: das MacBurn-Logo als Schild
+    NSString* logo = [NSBundle.mainBundle pathForResource:@"MacBurn-Logo" ofType:@"svg"];
+    if (logo) _core->loadStartTemplate(STD(logo));
+
     [self buildMenu];
     _window = [[MainWindow alloc] initWithCore:_core.get()];
     [_window makeKeyAndOrderFront:nil];
