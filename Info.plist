@@ -14,6 +14,8 @@
     <string>MacBurn</string>
     <key>CFBundleDisplayName</key>
     <string>MacBurn</string>
+    <key>CFBundleIconFile</key>
+    <string>MacBurn</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>

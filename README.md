@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo/MacBurn-Logo.png" alt="MacBurn" width="360"></p>
+
 # MacBurn
 
 Freie, native Laser-Software für macOS. Gestalten, vorbereiten und lasern mit GRBL-Diodenlasern.

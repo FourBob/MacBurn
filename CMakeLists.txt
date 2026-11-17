@@ -69,7 +69,9 @@ add_executable(MacBurn MACOSX_BUNDLE
   src/mac/CanvasView.mm
   src/mac/InspectorView.mm
   src/mac/TrafficWindow.mm
+  resources/MacBurn.icns
 )
+set_source_files_properties(resources/MacBurn.icns PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 target_include_directories(MacBurn PRIVATE src/mac)
 target_compile_options(MacBurn PRIVATE -fobjc-arc -Wall)
 target_link_libraries(MacBurn PRIVATE macburn_core
