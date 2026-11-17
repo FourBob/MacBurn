@@ -19,6 +19,28 @@ const PaletteDef kPalette[] = {
 };
 constexpr int kPaletteSize = int(sizeof kPalette / sizeof kPalette[0]);
 
+// Weitere Farben für zusätzliche Ebenen (z. B. ein zweiter Schnitt mit anderen Werten)
+const Color kExtraColors[] = {
+    {0.918f, 0.345f, 0.047f, 1},   // Orange
+    {0.486f, 0.227f, 0.929f, 1},   // Violett
+    {0.051f, 0.580f, 0.533f, 1},   // Petrol
+    {0.859f, 0.153f, 0.467f, 1},   // Magenta
+    {0.792f, 0.541f, 0.016f, 1},   // Ocker
+    {0.278f, 0.333f, 0.412f, 1},   // Schiefer
+    {0.396f, 0.639f, 0.051f, 1},   // Hellgrün
+    {0.012f, 0.518f, 0.780f, 1},   // Himmelblau
+};
+
+const char* layerNoun(Intent i) {
+    switch (i) {
+        case Intent::Cut: return "Schnitt";
+        case Intent::Engrave: return "Gravur";
+        case Intent::Mark: return "Ritzen";
+        case Intent::Photo: return "Foto";
+    }
+    return "Ebene";
+}
+
 double colorDistance(const Color& a, const Color& b) {
     return std::sqrt((a.r - b.r) * (a.r - b.r) + (a.g - b.g) * (a.g - b.g) + (a.b - b.b) * (a.b - b.b));
 }
@@ -99,6 +121,55 @@ void AppController::applyPaletteColor(int index) {
         newIndex = size_t(std::max(0, map[li]));
     });
     layer_ = int(newIndex);
+    changed();
+}
+
+void AppController::addLayer(Intent intent) {
+    if (!canEdit()) return;
+    auto used = [&](const Color& c) {
+        for (const auto& l : doc_.layers) if (colorDistance(l.color, c) < 0.1) return true;
+        return false;
+    };
+    Layer l;
+    l.intent = intent;
+    // Zuerst die feste Farbe der Absicht, sonst die nächste freie Zusatzfarbe
+    for (const auto& p : kPalette)
+        if (p.intent == intent && !used(p.color)) { l.color = p.color; l.colorKey = p.key; break; }
+    if (l.colorKey.empty()) {
+        l.color = kExtraColors[doc_.layers.size() % std::size(kExtraColors)];
+        for (const auto& c : kExtraColors) if (!used(c)) { l.color = c; break; }
+    }
+    // Name: „Schnitt“, „Schnitt 2“, …
+    std::string base = layerNoun(intent);
+    l.name = base;
+    for (int n = 2;; ++n) {
+        bool taken = false;
+        for (const auto& o : doc_.layers) if (o.name == l.name) { taken = true; break; }
+        if (!taken) break;
+        l.name = base + " " + std::to_string(n);
+    }
+    ObjectSet sel = selection_;
+    size_t newIndex = 0;
+    editDoc("Neue Ebene „" + l.name + "“", [&](Document& d) {
+        d.layers.push_back(l);
+        newIndex = d.layers.size() - 1;
+        if (sel.empty()) return;
+        for (auto& s : d.shapes) if (sel.count(s.object)) s.layer = newIndex;
+        auto map = d.removeEmptyLayers();
+        newIndex = size_t(std::max(0, map[newIndex]));
+    });
+    layer_ = int(newIndex);
+    message_ = sel.empty() ? "Neue Ebene „" + l.name + "“ – neue Formen landen dort"
+                           : "Auswahl liegt jetzt in der neuen Ebene „" + l.name + "“";
+    changed();
+}
+
+void AppController::dropSelectionOnLayer(size_t layer) {
+    if (!movingSelection() || layer >= doc_.layers.size()) return;
+    doc_ = drag_->before;   // Verschieben zurücknehmen: die Formen bleiben, wo sie waren
+    drag_.reset();
+    moveSelectionToLayer(layer);
+    message_ = "In Ebene „" + doc_.layers[size_t(layer_)].name + "“ gelegt";
     changed();
 }
 

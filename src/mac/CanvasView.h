@@ -20,5 +20,7 @@
 @property (nonatomic, copy) BOOL (^onReturn)(void);
 // Fadenkreuz statt Pfeil (Zeichenwerkzeug aktiv)
 @property (nonatomic) BOOL crosshair;
+// Ziehen über die Fläche hinaus (Fensterkoordinaten); YES beim Loslassen = dort abgelegt
+@property (nonatomic, copy) BOOL (^onDragInWindow)(NSPoint windowPoint, BOOL released);
 @property (nonatomic, copy) void (^onPointer)(int phase, double x, double y, double tolerance, BOOL shift);
 @end

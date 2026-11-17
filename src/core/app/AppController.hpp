@@ -144,6 +144,11 @@ public:
     // ohne Auswahl: Farbe zum Zeichnen wählen
     void applyPaletteColor(int index);
     void moveSelectionToLayer(size_t layer);
+    // Neue Ebene mit eigener Farbe; eine vorhandene Auswahl kommt hinein, sonst wird sie aktiv
+    void addLayer(Intent intent);
+    // Formen aus der Zeichenfläche auf eine Ebene der Liste gezogen
+    bool movingSelection() const { return drag_ && drag_->handle < 0 && drag_->moved; }
+    void dropSelectionOnLayer(size_t layer);
 
     // --- Formen bearbeiten ---
     // Maus: Punkte in mm; tolerance in mm (aus der aktuellen Zoomstufe)

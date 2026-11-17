@@ -1393,6 +1393,46 @@ TEST(palette_matches_imported_names_and_creates_layers) {
     CHECK(c.layerRows()[0].name == "Rot");
 }
 
+TEST(add_layer_from_list) {
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    size_t n = c.layerRows().size();                // Beispiel: Schnitt, Gravur, Ritzen
+    c.clearSelection();
+    c.addLayer(Intent::Cut);                        // Rot ist vergeben → Zusatzfarbe, eigener Name
+    auto rows = c.layerRows();
+    CHECK(rows.size() == n + 1);
+    CHECK(rows.back().name == "Schnitt 2" && rows.back().intent == "Schneiden");
+    CHECK(rows.back().selected);                    // neue Formen landen dort
+    for (size_t i = 0; i + 1 < rows.size(); ++i) CHECK(rows[i].color.r != rows.back().color.r || rows[i].color.g != rows.back().color.g);
+    dragDraw(c, Tool::Rect, {10, 10}, {30, 30});
+    CHECK(c.layerRows().size() == n + 1);
+    c.undo(); c.undo();
+    CHECK(c.layerRows().size() == n);
+    // Mit Auswahl: die Auswahl kommt in die neue Ebene
+    c.pointerDown({150, 80}, 1.0, false);
+    c.pointerUp();
+    c.addLayer(Intent::Engrave);
+    CHECK(layerOfSelection(c).rfind("Gravur 2", 0) == 0);
+}
+
+TEST(drag_selection_onto_layer) {
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    auto selX = [&] { for (auto& f : c.inspector()) if (f.key == "selX") return f.value; return -1.0; };
+    c.pointerDown({150, 80}, 1.0, false);           // Anhänger auswählen und ziehen
+    double x0 = selX();
+    c.pointerDrag({170, 90});
+    CHECK(c.movingSelection());
+    size_t gravur = 0;
+    auto rows = c.layerRows();
+    for (size_t i = 0; i < rows.size(); ++i) if (rows[i].name == "Gravur") gravur = i;
+    c.dropSelectionOnLayer(gravur);                 // über der Ebenenliste losgelassen
+    CHECK(!c.movingSelection());
+    CHECK(layerOfSelection(c).rfind("Gravur", 0) == 0);
+    CHECK(std::abs(selX() - x0) < 1e-9);            // Lage unverändert
+    CHECK(c.layerRows().size() == 2);               // „Ritzen“ ist leer geworden und weg
+    c.undo();                                       // ein Schritt stellt alle Ebenen wieder her
+    CHECK(c.layerRows().size() == 3);
+}
+
 // ---------- Materialtest ----------
 
 TEST(material_test_plate) {

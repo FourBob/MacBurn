@@ -218,8 +218,14 @@
     NSPoint m = [self convertPoint:self.window.mouseLocationOutsideOfEventStream fromView:nil];
     if (NSPointInRect(m, self.bounds)) [(c ? NSCursor.crosshairCursor : NSCursor.arrowCursor) set];
 }
-- (void)mouseDragged:(NSEvent*)e { [self pointer:1 event:e]; }
-- (void)mouseUp:(NSEvent*)e { [self pointer:2 event:e]; }
+- (void)mouseDragged:(NSEvent*)e {
+    [self pointer:1 event:e];
+    if (self.onDragInWindow) self.onDragInWindow(e.locationInWindow, NO);
+}
+- (void)mouseUp:(NSEvent*)e {
+    if (self.onDragInWindow && self.onDragInWindow(e.locationInWindow, YES)) return;
+    [self pointer:2 event:e];
+}
 
 // Drag & Drop aus dem Finder
 - (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)info {

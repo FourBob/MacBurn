@@ -96,9 +96,18 @@ und sind danach ausgewählt.
 **Zahlenfelder rechnen mit:** Komma oder Punkt, `100/3`, `25+12,5`, `(10+2)*3`, Einheiten `mm`, `cm`, `in`, `pt`.
 Angezeigt werden bis zu drei Nachkommastellen.
 
-### Farben (Ebenen) zuweisen
+### Ebenen
 
-Die Farbleiste unten auf der Zeichenfläche, das Menü *Objekt › Farbe* oder ⌥1–⌥3:
+Die Ebenenliste in der Seitenleiste ist die eine Stelle für Ebenen:
+
+- **Klick auf eine Ebene:** Sie wird aktiv – rechts stehen ihre Einstellungen, neue Formen landen dort.
+- **Formen auf eine Ebene ziehen:** Ausgewählte Formen auf der Zeichenfläche greifen und über der Ebene in der
+  Liste loslassen. Die Formen bleiben, wo sie sind, und gehören dann zu dieser Ebene (ein Widerrufschritt).
+- **„+“ neben *Ebenen*:** legt eine neue Ebene zum Schneiden, Gravieren oder Markieren an – zuerst in der festen
+  Farbe (Rot, Blau, Grün), danach in weiteren Farben, etwa für einen zweiten Schnitt mit anderen Werten. Eine
+  vorhandene Auswahl kommt gleich hinein.
+
+Schneller über die Tastatur oder das Menü *Objekt › Farbe*:
 
 | Farbe | Taste | Absicht neuer Ebenen |
 |---|---|---|
@@ -106,9 +115,9 @@ Die Farbleiste unten auf der Zeichenfläche, das Menü *Objekt › Farbe* oder �
 | Blau | ⌥2 | Gravieren |
 | Grün | ⌥3 | Markieren |
 
-Mit Auswahl: Die Formen kommen in die Ebene dieser Farbe – vorhandene Ebenen werden erkannt (z. B. „Rot“ aus
-einem SVG oder „Schnitt“ aus dem Beispiel), fehlende angelegt, leer gewordene entfernt. Ohne Auswahl wählt der
-Klick die Farbe für die nächsten gezeichneten Formen. Im Inspektor legt das Feld *Ebene* die Auswahl in jede
+Mit Auswahl kommen die Formen in die Ebene dieser Farbe – vorhandene Ebenen werden erkannt (z. B. „Rot“ aus
+einem SVG oder „Schnitt“ aus dem Beispiel), fehlende angelegt, leer gewordene entfernt. Ohne Auswahl wählt die
+Taste die Farbe für die nächsten gezeichneten Formen. Im Inspektor legt das Feld *Ebene* die Auswahl in jede
 vorhandene Ebene.
 
 ### Text

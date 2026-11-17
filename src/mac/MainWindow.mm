@@ -23,7 +23,8 @@ static NSToolbarItemIdentifier const kPrimary = @"primary";
     InspectorView* _inspector;
     NSTextField* _status;
     NSStackView* _tools;
-    NSStackView* _palette;
+    NSPopUpButton* _addLayer;
+    NSInteger _dropRow;
     BOOL _refreshQueued;
 }
 
@@ -91,7 +92,30 @@ static NSTextField* small(NSString* s, BOOL secondary) {
     _materialSub = small(@"", YES);
     NSTextField* arrow = small(@"↓", YES);
 
-    NSTextField* layersTitle = small(@"EBENEN", YES);
+    NSTextField* layersLabel = small(@"EBENEN", YES);
+    _addLayer = [[NSPopUpButton alloc] initWithFrame:NSZeroRect pullsDown:YES];
+    _addLayer.bordered = NO;
+    _addLayer.toolTip = @"Neue Ebene";
+    _addLayer.accessibilityLabel = @"Neue Ebene";
+    [(NSPopUpButtonCell*)_addLayer.cell setArrowPosition:NSPopUpNoArrow];
+    NSMenuItem* plus = [[NSMenuItem alloc] initWithTitle:@"" action:nil keyEquivalent:@""];
+    plus.image = [NSImage imageWithSystemSymbolName:@"plus" accessibilityDescription:@"Neue Ebene"];
+    [_addLayer.menu addItem:plus];
+    struct { const char* title; mb::Intent intent; } kinds[] = {
+        {"Neue Ebene: Schneiden", mb::Intent::Cut},
+        {"Neue Ebene: Gravieren", mb::Intent::Engrave},
+        {"Neue Ebene: Markieren", mb::Intent::Mark}};
+    for (auto& k : kinds) {
+        NSMenuItem* mi = [[NSMenuItem alloc] initWithTitle:NS(std::string(k.title)) action:@selector(addLayerPicked:) keyEquivalent:@""];
+        mi.target = self;
+        mi.tag = NSInteger(k.intent);
+        [_addLayer.menu addItem:mi];
+    }
+    NSView* layerGap = [[NSView alloc] init];
+    [layerGap setContentHuggingPriority:1 forOrientation:NSLayoutConstraintOrientationHorizontal];
+    NSStackView* layersTitle = [NSStackView stackViewWithViews:@[layersLabel, layerGap, _addLayer]];
+    layersTitle.spacing = 4;
+    _dropRow = -1;
     _layers = [[NSTableView alloc] init];
     NSTableColumn* col = [[NSTableColumn alloc] initWithIdentifier:@"layer"];
     [_layers addTableColumn:col];
@@ -114,7 +138,7 @@ static NSTextField* small(NSString* s, BOOL secondary) {
     side.spacing = 8;
     side.edgeInsets = NSEdgeInsetsMake(12, 12, 12, 12);
     [side setCustomSpacing:18 afterView:side.arrangedSubviews[2]];
-    for (NSView* v in side.arrangedSubviews) if (v != arrow && v != layersTitle)
+    for (NSView* v in side.arrangedSubviews) if (v != arrow)
         [v.widthAnchor constraintEqualToAnchor:side.widthAnchor constant:-24].active = YES;
 
     NSVisualEffectView* sideBg = [[NSVisualEffectView alloc] init];
@@ -158,6 +182,8 @@ static NSTextField* small(NSString* s, BOOL secondary) {
         else if (phase == 1) core->pointerDrag({x, y}, shift);
         else core->pointerUp();
     };
+    // Formen aus der Zeichenfläche auf eine Ebene der Liste ziehen
+    _canvas.onDragInWindow = ^BOOL(NSPoint p, BOOL released) { return [weakSelf layerDragAt:p released:released]; };
     _inspector = [[InspectorView alloc] initWithCore:_core];
     NSScrollView* inspScroll = [[NSScrollView alloc] init];
     inspScroll.drawsBackground = NO;
@@ -200,39 +226,6 @@ static NSTextField* small(NSString* s, BOOL secondary) {
     [NSLayoutConstraint activateConstraints:@[
         [toolBg.leadingAnchor constraintEqualToAnchor:_canvas.leadingAnchor constant:12],
         [toolBg.centerYAnchor constraintEqualToAnchor:_canvas.centerYAnchor],
-    ]];
-
-    // Farbleiste unten auf der Zeichenfläche
-    _palette = [NSStackView stackViewWithViews:@[]];
-    _palette.spacing = 6;
-    _palette.edgeInsets = NSEdgeInsetsMake(5, 8, 5, 8);
-    int pi = 0;
-    for (const auto& p : _core->paletteItems()) {
-        NSButton* b = [NSButton buttonWithTitle:@"" target:self action:@selector(palettePicked:)];
-        b.bordered = NO;
-        b.wantsLayer = YES;
-        b.layer.backgroundColor = NSCol(p.color).CGColor;
-        b.layer.cornerRadius = 11;
-        b.tag = pi;
-        b.toolTip = [NSString stringWithFormat:@"%@ – %@ (⌥%d)", NS(p.name), NS(p.intent), pi + 1];
-        b.refusesFirstResponder = YES;
-        b.accessibilityLabel = NS(p.name);
-        [b.widthAnchor constraintEqualToConstant:22].active = YES;
-        [b.heightAnchor constraintEqualToConstant:22].active = YES;
-        [_palette addArrangedSubview:b];
-        ++pi;
-    }
-    NSVisualEffectView* palBg = [[NSVisualEffectView alloc] init];
-    palBg.material = NSVisualEffectMaterialMenu;
-    palBg.state = NSVisualEffectStateActive;
-    palBg.wantsLayer = YES;
-    palBg.layer.cornerRadius = 9;
-    [self pin:_palette into:palBg top:0];
-    palBg.translatesAutoresizingMaskIntoConstraints = NO;
-    [_canvas addSubview:palBg];
-    [NSLayoutConstraint activateConstraints:@[
-        [palBg.centerXAnchor constraintEqualToAnchor:_canvas.centerXAnchor],
-        [palBg.bottomAnchor constraintEqualToAnchor:_canvas.bottomAnchor constant:-10],
     ]];
 
     NSSplitView* split = [[NSSplitView alloc] init];
@@ -320,7 +313,28 @@ static NSTextField* small(NSString* s, BOOL secondary) {
 // ---------- Aktionen → Kern ----------
 
 - (void)toolPicked:(NSButton*)b { _core->setTool(mb::Tool(b.tag)); }
-- (void)palettePicked:(NSButton*)b { _core->applyPaletteColor(int(b.tag)); }
+- (void)addLayerPicked:(NSMenuItem*)mi { _core->addLayer(mb::Intent(mi.tag)); }
+
+// Liefert YES, wenn das Loslassen über einer Ebene die Formen dorthin gelegt hat
+- (BOOL)layerDragAt:(NSPoint)windowPoint released:(BOOL)released {
+    NSInteger row = -1;
+    if (_core->movingSelection()) {
+        NSPoint p = [_layers convertPoint:windowPoint fromView:nil];
+        if (NSPointInRect(p, _layers.visibleRect)) row = [_layers rowAtPoint:p];
+    }
+    if (row != _dropRow) {
+        _dropRow = row;
+        [_layers setDropRow:row dropOperation:NSTableViewDropOn];
+        if (row >= 0) [[NSCursor dragCopyCursor] set]; else [[NSCursor arrowCursor] set];
+    }
+    if (!released) return NO;
+    _dropRow = -1;
+    [_layers setDropRow:-1 dropOperation:NSTableViewDropOn];
+    [[NSCursor arrowCursor] set];
+    if (row < 0) return NO;
+    _core->dropSelectionOnLayer(size_t(row));
+    return YES;
+}
 
 - (void)phaseChanged:(NSSegmentedControl*)s { _core->setPhase(mb::Phase(s.selectedSegment)); }
 - (void)machineChanged:(NSPopUpButton*)p { _core->selectMachine(int(p.indexOfSelectedItem)); }
@@ -594,14 +608,7 @@ static NSTextField* small(NSString* s, BOOL secondary) {
     [_inspector showFields:_core->inspector()];
     // Werkzeuge nur beim Gestalten und Vorbereiten
     _tools.superview.hidden = _core->atLaser();
-    _palette.superview.hidden = _core->atLaser();
-    auto pal = _core->paletteItems();
-    for (NSButton* b in _palette.arrangedSubviews) {
-        size_t i = size_t(b.tag);
-        bool active = i < pal.size() && pal[i].active;
-        b.layer.borderWidth = active ? 2.5 : 0;   // aktive Farbe mit Rahmen
-        b.layer.borderColor = NSColor.labelColor.CGColor;
-    }
+    _addLayer.hidden = _core->atLaser();
     for (NSButton* b in _tools.arrangedSubviews) b.state = b.tag == NSInteger(_core->tool()) ? NSControlStateValueOn : NSControlStateValueOff;
     _canvas.crosshair = _core->tool() != mb::Tool::Select && !_core->atLaser();
     _status.stringValue = NS(_core->statusText());
