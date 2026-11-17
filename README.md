@@ -10,8 +10,8 @@ Freie, native Laser-Software für macOS. Gestalten, vorbereiten und lasern mit G
 - Referenzmaschine: Mecpow X3 Pro (10 W)
 - Konzept und Release-Plan: [docs/Konzept.md](docs/Konzept.md)
 
-> **Stand:** frühe Entwicklungsversion (v0.1 in Arbeit). Verbinden, Bewegen, Rahmen, Materialtest und Aufträge
-> mit Laserstrahl laufen am X3 Pro; *Fortsetzen nach Abbruch* ist dort noch nicht erprobt. Bitte nur unter
+> **Stand:** frühe Entwicklungsversion (v0.1 in Arbeit). Verbinden, Bewegen, Rahmen, Materialtest und mehrere
+> Aufträge mit Laserstrahl sind am X3 Pro gut gelaufen; *Fortsetzen nach Abbruch* ist dort noch nicht erprobt. Bitte nur unter
 > Aufsicht und mit Schutzbrille verwenden.
 
 ## Voraussetzungen
