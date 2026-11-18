@@ -84,11 +84,7 @@ void AppController::moveSelectionToLayer(size_t layer) {
     ObjectSet sel = selection_;
     std::string name = doc_.layers[layer].name;
     size_t newIndex = layer;
-    editDoc("In Ebene „" + name + "“", [&](Document& d) {
-        for (auto& s : d.shapes) if (sel.count(s.object)) s.layer = layer;
-        auto map = d.removeEmptyLayers();   // verlassene Ebenen aufräumen
-        newIndex = size_t(std::max(0, map[layer]));
-    });
+    editDoc("In Ebene „" + name + "“", [&](Document& d) { newIndex = d.moveObjectsToLayer(sel, layer); });
     layer_ = int(newIndex);
     changed();
 }
@@ -102,7 +98,7 @@ void AppController::applyPaletteColor(int index) {
         if (existing) { layer_ = int(*existing); changed(); return; }
         Layer l;
         l.name = p.name; l.color = p.color; l.intent = p.intent; l.colorKey = p.key;
-        doc_.layers.push_back(l);   // leere Ebene: wird beim nächsten Umfärben wieder aufgeräumt
+        doc_.layers.push_back(l);   // leere Ebene, bis gezeichnet wird
         layer_ = int(doc_.layers.size() - 1);
         changed();
         return;
@@ -115,10 +111,7 @@ void AppController::applyPaletteColor(int index) {
         Layer l;
         l.name = p.name; l.color = p.color; l.intent = p.intent; l.colorKey = p.key;
         d.layers.push_back(l);
-        size_t li = d.layers.size() - 1;
-        for (auto& s : d.shapes) if (sel.count(s.object)) s.layer = li;
-        auto map = d.removeEmptyLayers();
-        newIndex = size_t(std::max(0, map[li]));
+        newIndex = d.moveObjectsToLayer(sel, d.layers.size() - 1);
     });
     layer_ = int(newIndex);
     changed();
@@ -152,11 +145,7 @@ void AppController::addLayer(Intent intent) {
     size_t newIndex = 0;
     editDoc("Neue Ebene „" + l.name + "“", [&](Document& d) {
         d.layers.push_back(l);
-        newIndex = d.layers.size() - 1;
-        if (sel.empty()) return;
-        for (auto& s : d.shapes) if (sel.count(s.object)) s.layer = newIndex;
-        auto map = d.removeEmptyLayers();
-        newIndex = size_t(std::max(0, map[newIndex]));
+        newIndex = d.moveObjectsToLayer(sel, d.layers.size() - 1);
     });
     layer_ = int(newIndex);
     message_ = sel.empty() ? "Neue Ebene „" + l.name + "“ – neue Formen landen dort"

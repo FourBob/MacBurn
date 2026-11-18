@@ -66,8 +66,12 @@ struct Document {
     void transform(const ObjectSet& objects, const Affine& m);
     // Texte ohne Formen (z. B. nach Kombinieren oder Löschen) entfernen
     void pruneTexts();
-    // Ebenen ohne Formen entfernen, Verweise der Formen anpassen; liefert alte→neue Nummern
-    std::vector<int> removeEmptyLayers();
+    // Ebenen entfernen (drop[i] = Ebene i weg), Verweise der Formen anpassen; liefert alte→neue Nummern (−1 = entfernt).
+    // Formen einer entfernten Ebene darf es nicht geben.
+    std::vector<int> removeLayers(const std::vector<bool>& drop);
+    // Formen der Objekte in die Ebene legen. Nur Ebenen, die dadurch leer werden, verschwinden – vom Nutzer
+    // angelegte leere Ebenen bleiben. Liefert die neue Nummer der Zielebene.
+    size_t moveObjectsToLayer(const ObjectSet& objects, size_t layer);
     static Document sample();   // Beispielprojekt für den ersten Start
 };
 

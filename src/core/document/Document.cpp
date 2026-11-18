@@ -45,13 +45,6 @@ ObjectSet Document::allObjects() const {
 
 namespace {
 
-double distToSegment(Vec2 p, Vec2 a, Vec2 b) {
-    Vec2 d = b - a;
-    double len2 = d.x * d.x + d.y * d.y;
-    double t = len2 > 0 ? std::clamp(((p.x - a.x) * d.x + (p.y - a.y) * d.y) / len2, 0.0, 1.0) : 0.0;
-    return (p - (a + d * t)).length();
-}
-
 bool insidePolygon(Vec2 p, const std::vector<Vec2>& pts) {
     bool in = false;
     for (size_t i = 0, j = pts.size() - 1; i < pts.size(); j = i++) {
@@ -69,8 +62,8 @@ std::optional<uint32_t> Document::hitTest(Vec2 p, double tol) const {
     for (auto it = shapes.rbegin(); it != shapes.rend(); ++it) {
         const auto& pts = it->path.points;
         for (size_t i = 1; i < pts.size(); ++i)
-            if (distToSegment(p, pts[i - 1], pts[i]) <= tol) return it->object;
-        if (it->path.closed && pts.size() > 2 && distToSegment(p, pts.back(), pts.front()) <= tol) return it->object;
+            if (distanceToSegment(p, pts[i - 1], pts[i]) <= tol) return it->object;
+        if (it->path.closed && pts.size() > 2 && distanceToSegment(p, pts.back(), pts.front()) <= tol) return it->object;
     }
     for (auto it = shapes.rbegin(); it != shapes.rend(); ++it)
         if (it->path.closed && it->path.points.size() > 2 && insidePolygon(p, it->path.points)) return it->object;
@@ -90,16 +83,26 @@ void Document::transform(const ObjectSet& objects, const Affine& m) {
     }
 }
 
-std::vector<int> Document::removeEmptyLayers() {
-    std::vector<bool> used(layers.size(), false);
-    for (const auto& s : shapes) if (s.layer < used.size()) used[s.layer] = true;
+std::vector<int> Document::removeLayers(const std::vector<bool>& drop) {
     std::vector<int> map(layers.size(), -1);
     std::vector<Layer> kept;
     for (size_t i = 0; i < layers.size(); ++i)
-        if (used[i]) { map[i] = int(kept.size()); kept.push_back(layers[i]); }
-    for (auto& s : shapes) s.layer = size_t(map[s.layer]);
+        if (i >= drop.size() || !drop[i]) { map[i] = int(kept.size()); kept.push_back(layers[i]); }
+    for (auto& s : shapes) if (s.layer < map.size() && map[s.layer] >= 0) s.layer = size_t(map[s.layer]);
     layers = std::move(kept);
     return map;
+}
+
+size_t Document::moveObjectsToLayer(const ObjectSet& objects, size_t layer) {
+    std::vector<bool> left(layers.size(), false);   // Ebenen, aus denen Formen herausgenommen wurden
+    for (auto& s : shapes)
+        if (objects.count(s.object) && s.layer != layer) {
+            if (s.layer < left.size()) left[s.layer] = true;
+            s.layer = layer;
+        }
+    for (const auto& s : shapes) if (s.layer < left.size()) left[s.layer] = false;   // noch belegt
+    auto map = removeLayers(left);
+    return layer < map.size() && map[layer] >= 0 ? size_t(map[layer]) : layer;
 }
 
 void Document::pruneTexts() {

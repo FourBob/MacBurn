@@ -200,7 +200,8 @@ einem Neustart von MacBurn. Die Fläche zeigt in Orange, was noch fehlt.
 Ohne Referenzfahrt vor dem Auftrag passt es nur, wenn die Steuerung nicht neu gestartet ist (z. B. nach einem
 USB-Abbruch) und das Werkstück nicht bewegt wurde. Darum am besten vor längeren Aufträgen referenzieren.
 An der Neubeginn-Stelle kann eine Kontur doppelt gebrannt werden; beim Gravieren ist dort evtl. ein Übergang
-zu sehen. *Verwerfen* löscht den Sicherungspunkt.
+zu sehen. *Verwerfen* löscht den Sicherungspunkt. Ein neuer Auftrag über *Lasern …* verwirft ihn ebenfalls – dafür
+steht in der Startprüfung ein eigener Haken.
 
 ### Projekte
 

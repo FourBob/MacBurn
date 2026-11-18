@@ -447,7 +447,7 @@ bool AppController::loadStartTemplate(const std::string& path) {
         l.name = cut ? "Schnitt" : "Gravur";
         l.intent = cut ? Intent::Cut : Intent::Engrave;
         l.color = cut ? Color{0.898f, 0.200f, 0.180f, 1} : Color{0.141f, 0.388f, 0.922f, 1};
-        l.colorKey = cut ? "#e5332e" : "#2463eb";
+        // colorKey bleibt der aus dem SVG (#ff0000 / #0000ff): ein späteres rotes oder blaues SVG landet in denselben Ebenen
         d.layers.push_back(l);
     }
     for (auto s : r.shapes) {
@@ -731,10 +731,10 @@ RenderList AppController::renderList() const {
     if (phase_ == Phase::Laser && resumeAvailable() && !dev_.jobRunning) {
         // Unterbrochener Auftrag: zeigen, was noch zu brennen ist
         rl.strokes.clear();
-        size_t r = restartIndex();
-        for (auto& path : remainingPaths(checkpoint_->track, r))
+        const auto& rest = restOfCheckpoint();
+        for (const auto& path : rest.restPaths)
             rl.strokes.push_back(Stroke{path, false, {0.85f, 0.35f, 0.10f, 1}, 1.2f, false});
-        Rect b = remainingBounds(checkpoint_->track, r);
+        Rect b = rest.restBounds;
         if (b.w > 0 || b.h > 0) rl.jobFrame = b;
         if (dev_.connected) rl.head = workPos();
         return rl;

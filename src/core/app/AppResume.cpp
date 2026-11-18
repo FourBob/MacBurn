@@ -35,6 +35,7 @@ std::string AppController::resumeDir() const {
 }
 
 void AppController::beginCheckpoint(std::vector<std::string> lines) {
+    if (lines.empty()) { discardResume(); return; }
     Checkpoint c;
     c.title = title_;
     c.material = material() ? material()->name : "";
@@ -50,7 +51,9 @@ void AppController::beginCheckpoint(std::vector<std::string> lines) {
 void AppController::updateCheckpoint() {
     if (!checkpoint_ || !checkpoint_->running) return;
     auto& c = *checkpoint_;
-    long acked = long(dev_.done) + c.deviceBase;   // bestätigt = angenommen, nicht unbedingt ausgeführt
+    // bestätigt = angenommen, nicht unbedingt ausgeführt. dev_.done zählt bei einem fortgesetzten Auftrag schon
+    // den ganzen Auftrag – hier darum die Zählung des Geräts selbst.
+    long acked = long(c.deviceAcked) + c.deviceBase;
     if (acked < 0) acked = 0;
     // Vorrat der Steuerung (Empfangs- und Planungspuffer) ist begrenzt: weiter zurück kann die
     // ausgeführte Zeile nicht liegen.
@@ -134,6 +137,7 @@ void AppController::resumeJob() {
     size_t pre = 0;
     auto lines = resumeLines(c.lines, c.track, r, &pre);
     c.deviceBase = long(r) - long(pre);
+    c.deviceAcked = 0;
     c.executing = r;
     c.running = true;
     saveCheckpoint(false);
@@ -156,7 +160,13 @@ void AppController::frameRemainder() {
         changed();
         return;
     }
-    Rect b = remainingBounds(c.track, restartIndex());
+    restOfCheckpoint();
+    Rect b = c.restBounds;
+    if (b.w <= 0 && b.h <= 0) {
+        message_ = "Vom unterbrochenen Auftrag ist nichts mehr zu brennen.";
+        changed();
+        return;
+    }
     Vec2 back = workPos();
     char f[32];
     std::snprintf(f, sizeof f, " F%.0f S0", machine() ? machine()->travelSpeedMmMin : 3000.0);
@@ -169,6 +179,17 @@ void AppController::frameRemainder() {
     changed();
 }
 
+const AppController::Checkpoint& AppController::restOfCheckpoint() const {
+    const auto& c = *checkpoint_;
+    size_t r = restartIndex();
+    if (c.restFor != r) {
+        c.restPaths = remainingPaths(c.track, r);
+        c.restBounds = remainingBounds(c.track, r);
+        c.restFor = r;
+    }
+    return c;
+}
+
 void AppController::addResumeFields(std::vector<Field>& f) const {
     if (!resumeAvailable()) return;
     const auto& c = *checkpoint_;
@@ -178,8 +199,11 @@ void AppController::addResumeFields(std::vector<Field>& f) const {
     f.push_back(h);
     f.push_back({Field::Kind::Info, "", "„" + c.title + "“ · " + c.material + " · gestartet " + c.startedAt +
                                         " · unterbrochen bei " + std::to_string(pct) + " %"});
-    f.push_back({Field::Kind::Info, "", "Neubeginn am Anfang der Kontur bzw. Zeile, die gerade lief: " + mm(c.track.to[r]) +
-                                        ". Orange auf der Fläche: was noch fehlt."});
+    if (restOfCheckpoint().restPaths.empty())
+        f.push_back({Field::Kind::Info, "", "Es ist nichts mehr zu brennen – der Auftrag war praktisch fertig."});
+    else if (r < c.track.to.size())
+        f.push_back({Field::Kind::Info, "", "Neubeginn am Anfang der Kontur bzw. Zeile, die gerade lief: " + mm(c.track.to[r]) +
+                                            ". Orange auf der Fläche: was noch fehlt."});
     bool needHome = c.homedAtStart && !dev_.homed;
     if (!dev_.connected) {
         f.push_back({Field::Kind::Info, "", "Zum Fortsetzen verbinden. Das Werkstück nicht verschieben."});

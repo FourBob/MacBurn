@@ -171,6 +171,7 @@ void GrblDevice::run(int bootDelayMs) {
             inflight_.clear();
             inflightBytes_ = 0;
             if (jobActive_) { jobActive_ = false; emit({DeviceEvent::Kind::JobAborted, {}, reason}); }
+            jobTotal_ = jobDone_ = 0;   // der nächste Auftrag (z. B. Fortsetzen) zählt wieder ab null
             emit({DeviceEvent::Kind::Diagnostic, {}, "Abbruch: " + reason + " Verlauf:" + history()});
         }
 

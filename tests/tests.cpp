@@ -706,6 +706,52 @@ TEST(resume_after_controller_restart) {
     fs::remove_all(root);
 }
 
+TEST(resume_twice_keeps_restart_point) {
+    // Zweiter Abbruch nach dem Fortsetzen: der Neubeginn darf nicht hinter der tatsächlich gelaufenen Stelle liegen
+    namespace fs = std::filesystem;
+    fs::path root = fs::temp_directory_path() / ("mbresume2-" + std::to_string(::getpid()));
+    fs::remove_all(root);
+    TestQueue q;
+    auto executing = [&] { auto v = json::parseFile((root / "resume" / "stand.json").string()); return v ? size_t((*v)["executing"].asNumber()) : size_t(0); };
+    {
+        AppController c(std::string(MB_SOURCE_DIR) + "/profiles", (root / "profiles").string());
+        c.setMainQueue([&](std::function<void()> fn) { q.push(std::move(fn)); });
+        c.setPhase(Phase::Laser);
+        auto fake = std::make_unique<FakeGrbl>();
+        FakeGrbl* f = fake.get();
+        c.connectTransport(std::move(fake), "test", 0);
+        CHECK(q.until([&] { return c.deviceConnected(); }));
+        c.home();
+        CHECK(q.until([&] { return c.deviceHomed() && c.primaryAction() == PrimaryAction::StartJob; }));
+        f->ackDelayMs = 1;
+        c.startJob(false);
+        CHECK(q.until([&] { return f->lines.size() > 400; }));
+        f->rebootNow = true;
+        CHECK(q.until([&] { return !c.jobRunning(); }));
+        CHECK(c.resumeAvailable());
+        bool discardItem = false;                     // neuer Auftrag nur mit Haken „wird verworfen“
+        for (auto& p : c.preflight()) discardItem |= p.text.find("wird verworfen") != std::string::npos && !p.automatic;
+        CHECK(discardItem);
+        CHECK(q.until([&] { for (auto& fl : c.inspector()) if (fl.key == "resumeJob" && fl.enabled) return true; return false; }));
+        size_t before = f->lines.size();
+        c.resumeJob();
+        size_t r = executing();                       // Neubeginn-Zeile
+        CHECK(r > 300);
+        CHECK(q.until([&] { return f->lines.size() > before + 150; }));
+        f->rebootNow = true;
+        CHECK(q.until([&] { return !c.jobRunning(); }));
+        CHECK(c.resumeAvailable());
+        size_t sent = f->lines.size() - before;       // seit dem Fortsetzen gesendet (mit Vorspann)
+        size_t e2 = executing();
+        CHECK(e2 >= r);
+        CHECK(e2 <= r + sent);                        // höchstens so weit, wie das Gerät überhaupt bekam
+        c.disconnect();
+        q.pump();
+    }
+    if (std::getenv("MB_KEEP")) return;
+    fs::remove_all(root);
+}
+
 TEST(anchor_points) {
     Rect r{10, 20, 100, 40};
     Vec2 c = anchorPoint(r, 4);
@@ -1408,6 +1454,40 @@ TEST(start_template_logo) {
     c.importFile(std::string(MB_SOURCE_DIR) + "/examples/schild.svg");
     CHECK(c.documentTitle() == "schild");
     for (auto& r : c.layerRows()) CHECK(r.name != "Gravur");
+}
+
+TEST(start_template_merges_imported_colors) {
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    CHECK(c.loadStartTemplate(std::string(MB_SOURCE_DIR) + "/examples/MacBurn-Logo.svg"));
+    dragDraw(c, Tool::Rect, {200, 200}, {230, 220});   // Vorlage geändert → Import ergänzt statt zu ersetzen
+    auto svg = std::filesystem::temp_directory_path() / ("mbred-" + std::to_string(::getpid()) + ".svg");
+    {
+        std::ofstream o(svg);
+        o << "<svg xmlns='http://www.w3.org/2000/svg' width='20mm' height='20mm' viewBox='0 0 20 20'>"
+             "<rect x='2' y='2' width='10' height='10' fill='none' stroke='#ff0000'/>"
+             "<rect x='4' y='4' width='4' height='4' fill='#0000ff'/></svg>";
+    }
+    CHECK(c.importFile(svg.string()).ok);
+    auto rows = c.layerRows();
+    CHECK(rows.size() == 2);                        // Rot → Schnitt, Blau → Gravur, keine neuen Ebenen
+    std::filesystem::remove(svg);
+}
+
+TEST(move_to_layer_keeps_user_empty_layers) {
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    size_t n = c.layerRows().size();
+    c.clearSelection();
+    c.addLayer(Intent::Cut);                        // „Schnitt 2“, leer
+    c.addLayer(Intent::Engrave);                    // „Gravur 2“, leer
+    CHECK(c.layerRows().size() == n + 2);
+    c.pointerDown({150, 80}, 1.0, false);           // Anhänger greifen und auf „Schnitt 2“ ziehen
+    c.pointerDrag({170, 90});
+    c.dropSelectionOnLayer(n);
+    bool gravur2 = false, schnitt2 = false;
+    for (auto& r : c.layerRows()) { gravur2 |= r.name == "Gravur 2"; schnitt2 |= r.name == "Schnitt 2"; }
+    CHECK(schnitt2);
+    CHECK(gravur2);                                 // selbst angelegte leere Ebene bleibt
+    CHECK(layerOfSelection(c).rfind("Schnitt 2", 0) == 0);
 }
 
 TEST(add_layer_from_list) {

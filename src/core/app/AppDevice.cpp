@@ -248,6 +248,9 @@ std::vector<PreflightCheck> AppController::preflight() const {
         c.push_back({"Ich bleibe während des Tests beim Gerät", "Der Schnittstreifen kann sich lösen.", false});
         return c;
     }
+    if (resumeAvailable())
+        c.push_back({"Der unterbrochene Auftrag „" + checkpoint_->title + "“ wird verworfen",
+                     "Lieber dort weitermachen? Abbrechen und unter „Unterbrochener Auftrag“ auf „Fortsetzen“ klicken.", false});
     c.push_back({"Design liegt auf der Arbeitsfläche",
                  off ? (origin_ == 0 ? std::string("Position: wie auf der Fläche")
                                      : std::string("Position: am Laserkopf, Anker ") + anchorName(anchor_))
@@ -336,6 +339,7 @@ void AppController::startJob(bool forTest) {
     }
     lines.erase(std::remove_if(lines.begin(), lines.end(), [](const std::string& l) { return l.empty() || l[0] == ';'; }),
                 lines.end());   // so, wie das Gerät sie zählt
+    if (resumeAvailable()) log("UNTERBROCHENER AUFTRAG VERWORFEN „" + checkpoint_->title + "“ (neuer Auftrag gestartet)");
     beginCheckpoint(lines);
     device_->startJob(std::move(lines));
     dev_.jobRunning = true;
@@ -433,6 +437,7 @@ void AppController::handleDevice(const grbl::DeviceEvent& e) {
             size_t oldPct = dev_.total ? dev_.done * 100 / dev_.total : 0;
             dev_.done = e.done;
             dev_.total = e.total;
+            if (checkpoint_ && checkpoint_->running) checkpoint_->deviceAcked = e.done;
             if (checkpoint_ && checkpoint_->running && checkpoint_->deviceBase != 0) {
                 // fortgesetzter Auftrag: Fortschritt bezogen auf den ganzen Auftrag
                 long whole = long(e.done) + checkpoint_->deviceBase;
@@ -554,7 +559,9 @@ void AppController::addDeviceFields(std::vector<Field>& f) const {
         s.highlight = true;
         f.push_back(s);
     } else {
-        if (!dev_.homed && !resumeAvailable())
+        if (resumeAvailable())
+            f.push_back({Field::Kind::Info, "", "Die Fläche zeigt den unterbrochenen Auftrag. „Lasern …“ startet das Design neu und verwirft ihn."});
+        else if (!dev_.homed)
             f.push_back({Field::Kind::Info, "", "Tipp: Mit einer Referenzfahrt vor dem Auftrag lässt er sich nach einem Stromausfall genau fortsetzen."});
         f.push_back({Field::Kind::Info, "", "Geschätzte Laufzeit: " + estimateText()});
         Field fr{Field::Kind::Button, "frame", "Rahmen abfahren (Laser aus)"};

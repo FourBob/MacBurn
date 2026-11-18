@@ -53,22 +53,12 @@ GcodeTrack trackGcode(const std::vector<std::string>& lines) {
     return t;
 }
 
-namespace {
-double distToSegment(Vec2 p, Vec2 a, Vec2 b) {
-    Vec2 ab = b - a;
-    double len2 = ab.x * ab.x + ab.y * ab.y;
-    double u = len2 > 0 ? std::clamp(((p.x - a.x) * ab.x + (p.y - a.y) * ab.y) / len2, 0.0, 1.0) : 0.0;
-    Vec2 q{a.x + ab.x * u, a.y + ab.y * u};
-    return (p - q).length();
-}
-} // namespace
-
 size_t locateExecuting(const GcodeTrack& t, size_t from, size_t to, Vec2 pos, double tol) {
     to = std::min(to, t.to.size());
     for (size_t i = from; i < to; ++i) {
         if (!t.motion[i]) continue;
         Vec2 a = i > 0 ? t.to[i - 1] : t.to[i];
-        if (distToSegment(pos, a, t.to[i]) <= tol) return i;
+        if (distanceToSegment(pos, a, t.to[i]) <= tol) return i;
     }
     return from;
 }

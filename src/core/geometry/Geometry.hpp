@@ -15,6 +15,14 @@ struct Vec2 {
     double length() const { return std::hypot(x, y); }
 };
 
+// Abstand des Punkts p von der Strecke a–b
+inline double distanceToSegment(Vec2 p, Vec2 a, Vec2 b) {
+    Vec2 d = b - a;
+    double len2 = d.x * d.x + d.y * d.y;
+    double t = len2 > 0 ? std::fmin(1.0, std::fmax(0.0, ((p.x - a.x) * d.x + (p.y - a.y) * d.y) / len2)) : 0.0;
+    return (p - (a + d * t)).length();
+}
+
 struct Rect {
     double x = 0, y = 0, w = 0, h = 0;
     bool contains(const Rect& o) const { return o.x >= x && o.y >= y && o.x + o.w <= x + w && o.y + o.h <= y + h; }

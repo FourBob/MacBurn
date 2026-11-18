@@ -277,8 +277,13 @@ private:
         bool homedAtStart = false;
         size_t executing = 0;             // Zeile, die zuletzt lief (Index in lines)
         long deviceBase = 0;              // Index in lines = bestätigte Gerätezeilen + deviceBase
+        size_t deviceAcked = 0;           // vom Gerät bestätigte Zeilen des laufenden Sendens (ohne deviceBase)
         bool running = false;             // gehört zum laufenden Auftrag
         double savedAt = 0;               // steady-Sekunden der letzten Sicherung
+        // Vorschau des Rests, gilt für restFor (Neubeginn-Zeile)
+        mutable size_t restFor = SIZE_MAX;
+        mutable std::vector<std::vector<Vec2>> restPaths;
+        mutable Rect restBounds;
     };
     std::optional<Checkpoint> checkpoint_;
     std::string resumeDir() const;
@@ -287,6 +292,7 @@ private:
     void saveCheckpoint(bool withLines);
     void loadCheckpoint();
     void addResumeFields(std::vector<Field>& f) const;
+    const Checkpoint& restOfCheckpoint() const;   // Vorschau des Rests, zwischengespeichert
     size_t restartIndex() const { return checkpoint_ ? restartLine(checkpoint_->track, checkpoint_->executing) : 0; }
     MaterialTestPlate testPlate() const;
     std::optional<Vec2> testOffset() const;
