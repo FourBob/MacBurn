@@ -131,6 +131,7 @@ void AppController::setPhase(Phase p) {
         if (phase_ == Phase::Test || p == Phase::Test) message_.clear();   // Testhinweis gehört nur in die Testphase
     }
     phase_ = p;
+    if (!atLaser()) pointerOff("Phase gewechselt");
     changed();
 }
 
@@ -290,6 +291,8 @@ void AppController::pressButton(const std::string& key) {
     if (key == "frame") { frame(); return; }
     if (key == "stop") { stop(); return; }
     if (key == "resumeJob") { resumeJob(); return; }
+    if (key == "pointer") { togglePointer(); return; }
+    if (key == "laserMode") { enableLaserMode(); return; }
     if (key == "resumeFrame") { frameRemainder(); return; }
     if (key == "resumeDiscard") { discardResume(); return; }
     if (key == "jog+x") { jog(1, 0); return; }

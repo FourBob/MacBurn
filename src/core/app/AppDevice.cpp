@@ -3,6 +3,7 @@
 #include "app/AppController.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cctype>
 #include <cmath>
 #include <cstdio>
@@ -126,6 +127,7 @@ void AppController::connect() {
 void AppController::connectTransport(std::unique_ptr<grbl::Transport> t, const std::string& name, int bootDelayMs) {
     if (dev_.connected || dev_.connecting) return;
     dev_ = {};
+    pointerSince_.reset();
     dev_.connecting = true;
     dev_.port = name;
     message_.clear();
@@ -134,6 +136,7 @@ void AppController::connectTransport(std::unique_ptr<grbl::Transport> t, const s
 }
 
 void AppController::disconnect() {
+    pointerOff("Trennen");
     lockedHead_.reset();
     device_->detach();
     dev_.connected = dev_.connecting = dev_.jobRunning = false;
@@ -178,6 +181,7 @@ void AppController::jog(int dx, int dy) {
 
 void AppController::home() {
     if (!dev_.connected || dev_.jobRunning) return;
+    pointerOff("Referenzfahrt");
     lockedHead_.reset();
     log("REFERENZFAHRT");
     message_ = "Referenzfahrt …";
@@ -187,6 +191,7 @@ void AppController::home() {
 
 void AppController::unlock() {
     if (!dev_.connected || dev_.jobRunning) return;
+    pointerOff("Entsperren");
     lockedHead_.reset();
     device_->sendLine("$X");
     message_ = "Entsperrt. Position ist erst nach einer Referenzfahrt wieder sicher.";
@@ -195,6 +200,7 @@ void AppController::unlock() {
 
 void AppController::frame() {
     if (!deviceIdle()) return;
+    pointerOff("Rahmen", false);   // der Rahmen beginnt ohnehin mit M5
     if (inTest()) {
         auto off = testOffset();
         if (!off) { message_ = "Von hier aus ragt die Testplatte über die Arbeitsfläche."; changed(); return; }
@@ -286,6 +292,7 @@ void AppController::startJob(bool forTest) {
         changed();
         return;
     }
+    pointerOff("Auftrag", false);   // der Auftrag beginnt mit M3/M4 S0
     if (inTest()) {
         auto off = testOffset();
         auto* m = machine();
@@ -358,7 +365,47 @@ void AppController::pauseOrResume() {
     changed();
 }
 
+namespace {
+double pointerClock() {
+    return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+}
+
+void AppController::togglePointer() {
+    if (pointerOn()) { pointerOff("ausgeschaltet"); changed(); return; }
+    if (!deviceIdle()) return;
+    double s = std::round(kPointerPercent / 100.0 * (machine() ? machine()->sMax : 1000.0));
+    // G1 ohne Fahrweg: im Laser-Modus ($32=1) leuchtet der Laser nur in G1/G2/G3; M3 = feste Leistung
+    device_->sendLine("G1 F1000 M3 S" + std::to_string(int(std::max(1.0, s))));
+    pointerSince_ = pointerClock();
+    log("LASERPUNKT AN · S" + std::to_string(int(std::max(1.0, s))) + " · " + posText(workPos()));
+    message_ = "Laserpunkt an – nicht in den Strahl sehen. Kopf mit den Pfeiltasten ausrichten.";
+    changed();
+}
+
+void AppController::pointerOff(const std::string& why, bool send) {
+    if (!pointerSince_) return;
+    pointerSince_.reset();
+    if (send && dev_.connected) device_->sendLine("M5");
+    log("LASERPUNKT AUS · " + why);
+}
+
+int AppController::laserMode() const {
+    auto it = dev_.settings.find(32);
+    return it == dev_.settings.end() ? -1 : (it->second != 0 ? 1 : 0);
+}
+
+void AppController::enableLaserMode() {
+    if (!deviceIdle() || laserMode() != 0) return;
+    log("LASER-MODUS EINSCHALTEN ($32=1)");
+    device_->sendLine("$32=1");
+    device_->sendLine("$$");   // neu lesen, damit der Hinweis verschwindet
+    message_ = "Laser-Modus der Steuerung eingeschaltet.";
+    changed();
+}
+
 void AppController::stop() {
+    pointerOff("Stopp");
     log(dev_.jobRunning ? "STOPP durch Benutzer" : "STOPP (Joggen abbrechen)");
     if (dev_.jobRunning) device_->abortJob("Vom Benutzer gestoppt.");
     else if (dev_.connected) device_->realtime(grbl::GrblDevice::kJogCancel);
@@ -391,12 +438,19 @@ void AppController::handleDevice(const grbl::DeviceEvent& e) {
             }
             dev_.state = e.status.state;
             if (dev_.jobRunning) updateCheckpoint();
+            if (pointerSince_ && pointerClock() - *pointerSince_ > kPointerMaxSec) {
+                pointerOff("nach " + std::to_string(int(kPointerMaxSec)) + " s von selbst");
+                message_ = "Laserpunkt nach 2 Minuten ausgeschaltet.";
+                changed();
+                return;
+            }
             if (stateChanged || e.kind == K::Connected) changed();
             else if (onStatus_) onStatus_();
             return;
         }
         case K::Disconnected:
             log("GETRENNT" + (e.text.empty() ? std::string() : " · " + e.text));
+            pointerOff("Verbindung getrennt", false);
             if (checkpoint_ && checkpoint_->running) { checkpoint_->running = false; saveCheckpoint(false); }
             dev_.connected = dev_.connecting = dev_.jobRunning = false;
             if (!e.text.empty()) message_ = e.text;
@@ -420,6 +474,7 @@ void AppController::handleDevice(const grbl::DeviceEvent& e) {
                 (dev_.jobRunning ? " · Auftrag " + std::to_string(dev_.done) + "/" + std::to_string(dev_.total) : ""));
             dev_.lastProblem = e.text;
             dev_.homed = false;   // nach einem Alarm ist die Position nicht mehr sicher
+            pointerOff("Alarm", false);   // GRBL schaltet den Laser bei Alarm selbst ab
             message_ = "Alarm: " + e.text;
             break;
         case K::Error:
@@ -512,6 +567,14 @@ void AppController::addDeviceFields(std::vector<Field>& f) const {
 
     bool idle = deviceIdle();
     bool alarm = dev_.state.rfind("Alarm", 0) == 0;
+    if (laserMode() == 0) {
+        Field w{Field::Kind::Info, "", "⚠ Der Laser-Modus der Steuerung ist aus ($32=0). Dann hält der Kopf an jeder Ecke kurz an und brennt dort dunkle Punkte, und die Leistung passt sich der Geschwindigkeit nicht an."};
+        w.highlight = true;
+        f.push_back(w);
+        Field lm{Field::Kind::Button, "laserMode", "Laser-Modus einschalten ($32=1)"};
+        lm.enabled = idle;
+        f.push_back(lm);
+    }
     f.push_back({Field::Kind::Header, "", "Bewegen"});
     if (alarm) {
         Field a{Field::Kind::Info, "", dev_.lastProblem.empty() ? "Alarm: Die Steuerung ist gesperrt." : dev_.lastProblem};
@@ -525,6 +588,12 @@ void AppController::addDeviceFields(std::vector<Field>& f) const {
     Field step{Field::Kind::Choice, "jogStep", "Schrittweite", {"0,1 mm", "1 mm", "10 mm", "50 mm"}};
     step.selected = jogStep_;
     f.push_back(step);
+    Field lp{Field::Kind::Button, "pointer", pointerOn() ? "Laserpunkt aus" : "Laserpunkt an (" + std::to_string(int(kPointerPercent)) + " %)"};
+    lp.enabled = pointerOn() || idle;
+    lp.highlight = pointerOn();
+    f.push_back(lp);
+    if (pointerOn())
+        f.push_back({Field::Kind::Info, "", "Der Laser leuchtet schwach – nicht in den Strahl sehen. Geht beim Rahmen, Lasern und nach 2 Minuten von selbst aus."});
     Field h{Field::Kind::Button, "home", "Referenzfahrt"};
     h.enabled = !dev_.jobRunning;
     f.push_back(h);

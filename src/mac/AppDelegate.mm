@@ -190,6 +190,7 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
     [laser addItem:NSMenuItem.separatorItem];
     [laser addItem:item(@"Referenzfahrt", @selector(laserHome:), @"h", NSEventModifierFlagCommand | NSEventModifierFlagOption)];
     [laser addItem:item(@"Rahmen abfahren", @selector(laserFrame:), @"r")];
+    [laser addItem:item(@"Laserpunkt", @selector(laserPointer:), @"p", NSEventModifierFlagCommand | NSEventModifierFlagOption)];
     [laser addItem:NSMenuItem.separatorItem];
     NSMenuItem* p0 = item(@"Position wie auf der Fläche", @selector(laserPosition:), @"");
     p0.tag = 0;
@@ -252,6 +253,10 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
     if (mi.action == @selector(laserDisconnect:)) return _core->deviceConnected() && !_core->jobRunning();
     if (mi.action == @selector(laserHome:) || mi.action == @selector(laserFrame:)) return _core->deviceConnected() && !_core->jobRunning();
     if (mi.action == @selector(laserStop:)) return _core->deviceConnected();
+    if (mi.action == @selector(laserPointer:)) {
+        mi.state = _core->pointerOn() ? NSControlStateValueOn : NSControlStateValueOff;
+        return _core->deviceConnected() && !_core->jobRunning();
+    }
     if (mi.action == @selector(laserTest:) || mi.action == @selector(laserTestNew:)) return !_core->jobRunning();
     if (mi.action == @selector(laserPosition:)) { mi.state = mi.tag == _core->positionMode() ? NSControlStateValueOn : NSControlStateValueOff; return !_core->jobRunning(); }
     if (mi.action == @selector(laserAnchor:)) { mi.state = mi.tag == _core->anchor() ? NSControlStateValueOn : NSControlStateValueOff; return _core->positionMode() == 1 && !_core->jobRunning(); }
@@ -291,6 +296,7 @@ static NSMenuItem* item(NSString* title, SEL action, NSString* key, NSEventModif
 - (void)laserHome:(id)sender { _core->home(); }
 - (void)laserFrame:(id)sender { _core->frame(); }
 - (void)laserStop:(id)sender { _core->stop(); }
+- (void)laserPointer:(id)sender { _core->togglePointer(); }
 - (void)showTraffic:(id)sender {
     if (!_traffic) _traffic = [[TrafficWindow alloc] initWithCore:_core.get()];
     [_traffic makeKeyAndOrderFront:nil];

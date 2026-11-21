@@ -307,6 +307,7 @@ public:
     std::atomic<int> ackDelayMs{0};     // langsame Steuerung (jede Zeile braucht Zeit)
     std::atomic<bool> silent{false};    // Steuerung antwortet vorübergehend nicht
     std::atomic<bool> rebootNow{false}; // Steuerung startet unerwartet neu
+    std::atomic<int> laserMode{1};      // $32
 
     bool write(const std::string& d) override {
         for (char ch : d) {
@@ -340,7 +341,8 @@ public:
             unacked_.pop_front();
             buffered_ -= l.size() + 1;
             if (l == "$I") { out_.push_back("[VER:1.1h.20231023:]"); out_.push_back("[PRODUCER:Test]"); }
-            if (l == "$$") out_.push_back("$130=410.000");
+            if (l == "$$") { out_.push_back("$32=" + std::to_string(int(laserMode))); out_.push_back("$130=410.000"); }
+            if (l == "$32=1") laserMode = 1;
             if (l == "$H") homeReports = 3;
             out_.push_back(l.rfind("G99", 0) == 0 ? "error:20" : "ok");
         }
@@ -750,6 +752,50 @@ TEST(resume_twice_keeps_restart_point) {
     }
     if (std::getenv("MB_KEEP")) return;
     fs::remove_all(root);
+}
+
+TEST(laser_pointer_and_laser_mode) {
+    TestQueue q;
+    AppController c(std::string(MB_SOURCE_DIR) + "/profiles", "/nonexistent");
+    c.setMainQueue([&](std::function<void()> fn) { q.push(std::move(fn)); });
+    c.setPhase(Phase::Laser);
+    auto fake = std::make_unique<FakeGrbl>();
+    FakeGrbl* f = fake.get();
+    f->laserMode = 0;
+    c.connectTransport(std::move(fake), "test", 0);
+    CHECK(q.until([&] { return c.deviceConnected() && c.laserMode() == 0; }));
+    auto field = [&](const std::string& key) { for (auto& fl : c.inspector()) if (fl.key == key) return fl; return Field{}; };
+    CHECK(field("laserMode").key == "laserMode");        // Hinweis mit Knopf
+    CHECK(q.until([&] { return c.primaryAction() == PrimaryAction::StartJob; }));
+    c.pressButton("laserMode");
+    CHECK(q.until([&] { return c.laserMode() == 1; }));
+    CHECK(field("laserMode").key.empty());               // Hinweis verschwindet
+
+    // Laserpunkt: G1 ohne Fahrweg mit M3 und 1 % Leistung
+    c.pressButton("pointer");
+    CHECK(c.pointerOn());
+    CHECK(q.until([&] { for (auto& l : f->lines) if (l.rfind("G1 F1000 M3 S", 0) == 0) return true; return false; }));
+    CHECK(field("pointer").label == "Laserpunkt aus");
+    size_t n = f->lines.size();
+    c.pressButton("pointer");                            // aus
+    CHECK(!c.pointerOn());
+    CHECK(q.until([&] { return f->lines.size() > n && f->lines.back() == "M5"; }));
+    // Rahmen schaltet ihn aus (Rahmen beginnt mit M5)
+    c.pressButton("pointer");
+    CHECK(c.pointerOn());
+    CHECK(q.until([&] { return c.primaryAction() == PrimaryAction::StartJob; }));
+    c.frame();
+    CHECK(!c.pointerOn());
+    // Phasenwechsel zum Gestalten schaltet ihn aus
+    CHECK(q.until([&] { return c.primaryAction() == PrimaryAction::StartJob && c.inspector().size() > 0 && field("pointer").enabled; }, 20000));
+    c.pressButton("pointer");
+    CHECK(c.pointerOn());
+    n = f->lines.size();
+    c.setPhase(Phase::Design);
+    CHECK(!c.pointerOn());
+    CHECK(q.until([&] { return f->lines.size() > n && f->lines.back() == "M5"; }));
+    c.disconnect();
+    q.pump();
 }
 
 TEST(anchor_points) {

@@ -199,6 +199,15 @@ public:
     // Verbinden über eine schon geöffnete Verbindung (Tests mit simulierter Steuerung, später WLAN)
     void connectTransport(std::unique_ptr<grbl::Transport> t, const std::string& name, int bootDelayMs = 2500);
     void disconnect();
+    // Laserpunkt: Laser leuchtet schwach (zum Ausrichten auf dem Werkstück). Geht von selbst aus bei
+    // Auftrag, Rahmen, Referenzfahrt, Alarm, Trennen, Phasenwechsel und nach kPointerMaxSec.
+    void togglePointer();
+    bool pointerOn() const { return pointerSince_.has_value(); }
+    static constexpr double kPointerPercent = 1.0;
+    static constexpr double kPointerMaxSec = 120.0;
+    // Laser-Modus der Steuerung ($32): 0 = aus, 1 = an, -1 = unbekannt (noch nicht gelesen)
+    int laserMode() const;
+    void enableLaserMode();
     // Fortsetzen nach Abbruch (Stromausfall, Verbindungsabbruch, Stopp)
     bool resumeAvailable() const { return checkpoint_ && !checkpoint_->running; }
     void resumeJob();
@@ -286,6 +295,8 @@ private:
         mutable Rect restBounds;
     };
     std::optional<Checkpoint> checkpoint_;
+    std::optional<double> pointerSince_;     // steady-Sekunden, seit der Laserpunkt leuchtet
+    void pointerOff(const std::string& why, bool send = true);
     std::string resumeDir() const;
     void beginCheckpoint(std::vector<std::string> lines);
     void updateCheckpoint();

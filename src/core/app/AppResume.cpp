@@ -144,6 +144,7 @@ void AppController::resumeJob() {
     size_t pct = c.lines.empty() ? 0 : r * 100 / c.lines.size();
     log("AUFTRAG FORTGESETZT „" + c.title + "“ · ab Zeile " + std::to_string(r + 1) + " von " + std::to_string(c.lines.size()) +
         " (" + std::to_string(pct) + " %) · Start bei " + mm(c.track.to[r]) + (dev_.homed ? " · referenziert" : " · OHNE Referenzfahrt"));
+    pointerOff("Fortsetzen", false);
     lockedHead_.reset();
     device_->startJob(std::move(lines));
     dev_.jobRunning = true;
@@ -167,6 +168,7 @@ void AppController::frameRemainder() {
         changed();
         return;
     }
+    pointerOff("Rahmen", false);
     Vec2 back = workPos();
     char f[32];
     std::snprintf(f, sizeof f, " F%.0f S0", machine() ? machine()->travelSpeedMmMin : 3000.0);

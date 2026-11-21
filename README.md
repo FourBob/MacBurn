@@ -176,9 +176,16 @@ Geschwindigkeit geändert, passt MacBurn die Leistung so an, dass die Gravur gle
    - **Wie auf der Fläche:** Das Design wird genau dort gelasert, wo es auf der Arbeitsfläche liegt.
    - **Am Laserkopf:** Ein wählbarer Ankerpunkt des Designs (Standard: Mitte) liegt unter dem Kopf.
      Kopf mit den Pfeiltasten über das Werkstück fahren.
+   **Laserpunkt** (⌥⌘P oder Knopf unter *Bewegen*): Der Laser leuchtet mit 1 % Leistung, damit man auf dem
+   Werkstück sieht, wo der Kopf steht. Er geht von selbst aus beim Rahmen, Lasern, bei der Referenzfahrt, einem
+   Alarm, dem Trennen, beim Wechsel zum Gestalten und spätestens nach 2 Minuten. Nicht in den Strahl sehen.
 3. *Rahmen abfahren* (⌘R) – der Kopf fährt den Umriss ab, der Laser bleibt aus.
 4. *Lasern …* → Startprüfung abhaken (Fokus, Luftpumpe, Schutzbrille, Aufsicht) → *Starten*.
 5. **Esc** oder **⌘.** stoppt sofort: Die Steuerung wird zurückgesetzt, der Laser ist aus.
+
+**Laser-Modus der Steuerung:** Beim Verbinden liest MacBurn die GRBL-Einstellungen. Ist der Laser-Modus aus
+(`$32=0`), hält der Kopf an jeder Ecke kurz an und brennt dort dunkle Punkte. MacBurn zeigt dann einen Hinweis
+mit dem Knopf *Laser-Modus einschalten* (sendet `$32=1`, bleibt in der Steuerung gespeichert).
 
 Die Zeitschätzung bildet die Bahnplanung von GRBL nach (Beschleunigung, Kurvenabweichung).
 Leerfahrten und Rahmen laufen mit einer schonenden Fahrgeschwindigkeit aus dem Maschinenprofil
@@ -230,6 +237,7 @@ im Schließknopf; vor dem Schließen fragt MacBurn nach.
 | ⌘K / ⇧⌘K | Laser verbinden / trennen |
 | ⌥⌘H | Referenzfahrt |
 | ⌘R | Rahmen abfahren |
+| ⌥⌘P | Laserpunkt an/aus |
 | ⌥⌘L | Verbindungsverlauf |
 | Esc / ⌘. | Stopp (bei laufendem Auftrag), sonst Zeichnen abbrechen bzw. Auswahl aufheben |
 

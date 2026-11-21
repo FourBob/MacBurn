@@ -229,6 +229,8 @@ void GrblDevice::run(int bootDelayMs) {
         transport_->write(std::string(1, char(kFeedHold)));
         transport_->write(std::string(1, char(kReset)));
         jobActive_ = false;
+    } else {
+        transport_->write("M5\n");   // Laser sicher aus (z. B. Laserpunkt), bevor die Verbindung endet
     }
     transport_->close();
     running_ = false;
